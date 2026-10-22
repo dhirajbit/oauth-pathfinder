@@ -1,0 +1,296 @@
+{
+  "slug": "github",
+  "name": "GitHub",
+  "website": "https://github.com",
+  "category": "Developer tools",
+  "summary": "Registering either an OAuth App or a GitHub App takes minutes with zero GitHub review; GitHub itself recommends GitHub Apps for fine-grained permissions, short-lived installation tokens, and immunity from org OAuth-app restrictions. The thing that actually stalls agents is organization policy: OAuth apps are blocked from private org data until an org owner approves them, and members cannot install GitHub Apps on an org without owner approval.",
+  "composio": {
+    "managedAuthAvailable": true,
+    "toolkitSlug": "GITHUB",
+    "note": "Listed under 'Composio-managed OAuth available' on docs.composio.dev/toolkits/managed-auth. If you bring your own OAuth App or GitHub App, add https://backend.composio.dev/api/v3/toolkits/auth/callback as a callback URL and set the same value as oauth_redirect_uri in the Composio auth config (exact match required)."
+  },
+  "verdict": {
+    "difficulty": "easy",
+    "difficultyReason": "Self-serve registration with no approval for either app type; the only decisions are OAuth App vs GitHub App and which fine-grained permissions to request. Complexity comes later from org access policies and from implementing JWT + installation-token auth for GitHub Apps.",
+    "handsOnMinutes": { "min": 10, "max": 30 },
+    "approvalWait": {
+      "required": "none",
+      "minDays": 0,
+      "maxDays": 0,
+      "note": "GitHub never reviews app registration. Org owners may need to approve OAuth app access or GitHub App installation requests on a per-org basis (human-dependent, hours to days). GitHub Marketplace listing is optional and separate."
+    },
+    "timeToFirstToken": "~10 min; no approval. Org-owner approval for OAuth apps / org installs is per-org and human-paced. Marketplace listing is optional (free apps: listing requirements only; paid apps need verified publisher plus 100 installs / 200 users)."
+  },
+  "prerequisites": [
+    { "text": "A GitHub account; to own the app under an organization you must be an org owner (or be granted GitHub App manager).", "blocking": true, "source": "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app" },
+    { "text": "A homepage URL (can be the repo or your account URL) and at least one callback URL if you issue user tokens.", "blocking": true, "source": "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app" },
+    { "text": "For GitHub Apps acting on their own behalf: a place to store the private key (PEM) and code to mint JWTs and installation tokens (Octokit SDKs do this).", "blocking": false, "source": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app" },
+    { "text": "For Marketplace listing: privacy policy link, support link/email, publisher contact, webhook handling for plan events; paid plans require a verified-publisher org.", "blocking": false, "source": "https://docs.github.com/en/apps/github-marketplace/creating-apps-for-github-marketplace/requirements-for-listing-an-app" }
+  ],
+  "steps": [
+    {
+      "id": "choose-app-type",
+      "title": "Choose GitHub App (recommended) vs OAuth App",
+      "detail": "GitHub recommends GitHub Apps: fine-grained read/write permissions per resource, access limited to repositories chosen at install, installation tokens that act as a bot without a user, 1-hour token expiry, and no exposure to org OAuth-app restrictions. Pick an OAuth App only if you need enterprise-level resources or a dead-simple 'sign in as user' with coarse scopes.",
+      "who": "agent",
+      "tips": [
+        "An agent that needs to act autonomously on repos (open PRs, read code) should use a GitHub App installation token, not a user token tied to one human.",
+        "OAuth App tokens inherit everything the user can see and silently lose access when the user's permissions change."
+      ],
+      "source": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps"
+    },
+    {
+      "id": "draft-config",
+      "title": "Draft the registration (name, URLs, permissions, events)",
+      "detail": "Name max 34 chars and globally unique; homepage URL; up to 10 callback URLs; webhook URL + secret if subscribing to events; per-permission access level (No access / Read-only / Read & write); and 'Where can this GitHub App be installed?' (Only on this account vs Any account). For an OAuth App you only pick name, homepage, description, and callback URLs.",
+      "who": "agent",
+      "tips": [
+        "Agent-friendly path: build a GitHub App manifest JSON (name, url, redirect_url, callback_urls, hook_attributes, public, default_permissions, default_events) and POST it to https://github.com/settings/apps/new; a human still clicks Create GitHub App, then you exchange the code at POST /app-manifests/{code}/conversions within 1 hour to receive id, pem, webhook_secret, client_id, client_secret.",
+        "Request the minimum permissions; GitHub shows every permission to the installer."
+      ],
+      "source": "https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest"
+    },
+    {
+      "id": "register",
+      "title": "Register the app in Developer settings",
+      "detail": "GitHub App: Settings -> Developer settings -> GitHub Apps -> New GitHub App (org: Your organizations -> Settings -> same path). OAuth App: Developer settings -> OAuth apps -> New OAuth App. Each user/org may own up to 100 of each type. No GitHub review occurs; the app is live on Create.",
+      "who": "assisted",
+      "portalUrl": "https://github.com/settings/apps/new",
+      "tips": [
+        "OAuth App form is at https://github.com/settings/applications/new.",
+        "Requires an interactive GitHub login; the agent prepares every field value, the human submits."
+      ],
+      "source": "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app"
+    },
+    {
+      "id": "callback-and-token-options",
+      "title": "Set callback URLs and user-token options",
+      "detail": "Add every redirect you will use (your app, plus https://backend.composio.dev/api/v3/toolkits/auth/callback if Composio handles the flow); up to 10 per app. For GitHub Apps keep 'Expire user authorization tokens' checked (8-hour tokens + 6-month refresh tokens), tick 'Request user authorization (OAuth) during installation' if you want a user token at install time, and 'Enable Device Flow' for CLIs/headless agents.",
+      "who": "assisted",
+      "portalUrl": "https://github.com/settings/apps",
+      "tips": [
+        "Wildcard matching is a per-callback-URL setting: when enabled, host (minus subdomains) and port must match exactly and the path must be a subdirectory of the callback; when disabled, redirect_uri must match exactly. Apps with a single callback registered before 2026-08-03 have wildcard matching enabled; GitHub recommends turning it off.",
+        "Loopback redirects (http://127.0.0.1/path) may use any port at runtime; prefer 127.0.0.1 or ::1 over localhost."
+      ],
+      "source": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps"
+    },
+    {
+      "id": "credentials",
+      "title": "Generate client secret and (GitHub App) private key",
+      "detail": "Click Generate a new client secret and copy it immediately. For GitHub Apps also click Generate a private key to download a PEM; you sign short-lived JWTs with it to call /app endpoints and mint installation tokens. Store both in a secret manager, never in the repo.",
+      "who": "assisted",
+      "portalUrl": "https://github.com/settings/apps",
+      "source": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app"
+    },
+    {
+      "id": "install",
+      "title": "Install the GitHub App on an account and pick repositories",
+      "detail": "From the app's public page (https://github.com/apps/<slug>) click Install, choose the account, and select All repositories or specific repos. On a personal account the installer is the owner. On an organization only owners can install; members and repo admins submit an installation request an owner must approve (repo admins can self-install only apps without org-level or repository-administration permissions, and only if the org allows it).",
+      "who": "assisted",
+      "tips": [
+        "Private (Only on this account) apps can only be installed where they were created; choose Any account before sharing."
+      ],
+      "source": "https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/limiting-oauth-app-and-github-app-access-requests-and-installations"
+    },
+    {
+      "id": "installation-token",
+      "title": "Mint an installation access token (app acting as itself)",
+      "detail": "Create a JWT signed with the private key, find the installation id (GET /app/installations or GET /repos/{owner}/{repo}/installation), then POST /app/installations/{id}/access_tokens with Authorization: Bearer <jwt>. The token lasts 1 hour and can be narrowed to specific repositories (up to 500) and a permission subset. Starting 2026-04-27 new tokens use a stateless ghs_APPID_JWT format.",
+      "who": "agent",
+      "tips": [
+        "Octokit SDKs regenerate installation tokens automatically; use them rather than hand-rolling JWT refresh."
+      ],
+      "source": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app"
+    },
+    {
+      "id": "user-token",
+      "title": "Implement the user authorization flow (web or device)",
+      "detail": "Web: send users to https://github.com/login/oauth/authorize?client_id=...&redirect_uri=...&state=... (OAuth Apps add scope=; GitHub Apps use the app's permissions), then POST https://github.com/login/oauth/access_token with client_id, client_secret, code (10-minute expiry) and the same redirect_uri. Device: POST https://github.com/login/device/code, show the user_code, poll /login/oauth/access_token with grant_type=urn:ietf:params:oauth:grant-type:device_code no faster than the returned interval. Tokens are gho_ prefixed, refresh tokens ghr_.",
+      "who": "agent",
+      "tips": [
+        "Device flow must be enabled in app settings or you get device_flow_disabled; device code submissions are capped at 50/hour per app.",
+        "GitHub App user tokens expire after 8 hours (expires_in 28800) with a 6-month refresh token; OAuth App tokens are non-expiring unless you request offline_access.",
+        "Refreshing cannot change scopes/permissions; bad_refresh_token means the user must re-authorize."
+      ],
+      "source": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app"
+    },
+    {
+      "id": "org-approval",
+      "title": "Clear organization access policies (OAuth Apps)",
+      "detail": "New organizations have OAuth app access restrictions enabled by default: an unapproved OAuth app gets no API access to private org resources, no webhooks from private org repos, and no privileged writes to public org resources. The user authorizes the app personally, then Settings -> Applications -> Authorized OAuth Apps -> app -> Request access next to the org -> Request approval from owners; an org owner approves from the org's OAuth app policy page. GitHub Apps are not subject to this policy.",
+      "who": "human",
+      "portalUrl": "https://github.com/settings/applications",
+      "source": "https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions"
+    },
+    {
+      "id": "marketplace",
+      "title": "Optionally list on GitHub Marketplace",
+      "detail": "Draft a listing (logo, feature card, screenshots, description, publisher contact, privacy policy link, support link/email), add at least one pricing plan (free is fine), accept the GitHub Marketplace Developer Agreement, and submit for publication; an onboarding expert follows up. Paid plans require the owning org to be a verified publisher plus 100 installations (GitHub Apps) or 200 users (OAuth Apps) and purchase-event webhook handling.",
+      "who": "human",
+      "portalUrl": "https://github.com/marketplace",
+      "tips": [
+        "Listing is never required to distribute: any public GitHub App is installable from its https://github.com/apps/<slug> page."
+      ],
+      "source": "https://docs.github.com/en/apps/github-marketplace/creating-apps-for-github-marketplace/requirements-for-listing-an-app"
+    }
+  ],
+  "scopes": {
+    "note": "OAuth Apps use coarse space-delimited scopes (repo alone grants full read/write on all private repos the user can reach); GitHub normalizes redundant scopes and users can reduce granted scopes after the fact. GitHub Apps do not use scopes at all: you declare fine-grained permissions (e.g. contents: read, pull_requests: write) and installers see each one. None of these trigger a GitHub review.",
+    "examples": [
+      { "scope": "repo", "purpose": "OAuth App: full access to public and private repos including code, statuses, collaborators, deployments, webhooks. Very coarse; the main reason to prefer a GitHub App.", "triggersReview": false },
+      { "scope": "public_repo", "purpose": "OAuth App: read/write on public repositories only.", "triggersReview": false },
+      { "scope": "read:org", "purpose": "OAuth App: read org and team membership; needed to list a user's orgs.", "triggersReview": false },
+      { "scope": "read:user", "purpose": "OAuth App: read profile data for sign-in.", "triggersReview": false },
+      { "scope": "user:email", "purpose": "OAuth App: read the user's email addresses.", "triggersReview": false },
+      { "scope": "workflow", "purpose": "OAuth App: add or update GitHub Actions workflow files (required on top of repo to push .github/workflows changes).", "triggersReview": false },
+      { "scope": "offline_access", "purpose": "OAuth App pseudo-scope: opt a single sign-in into 8-hour expiring tokens plus refresh token.", "triggersReview": false },
+      { "scope": "permissions: contents=read, pull_requests=write, issues=write", "purpose": "GitHub App fine-grained permissions equivalent of what an agent typically needs; set in app settings, not in the authorize URL.", "triggersReview": false }
+    ]
+  },
+  "approval": {
+    "required": "none",
+    "triggers": [
+      "An OAuth App touching an organization with OAuth app access restrictions enabled (default for new orgs) needs org-owner approval.",
+      "A non-owner installing a GitHub App on an organization triggers an installation request to org owners.",
+      "Publishing a GitHub Marketplace listing (optional) requires meeting listing requirements; paid plans require verified-publisher status."
+    ],
+    "process": "GitHub performs no review when you register or install an app. Approvals that do exist are organization-side: members request OAuth app approval or GitHub App installation, and an org owner approves or denies from org settings. Marketplace: create a draft listing, add a pricing plan, accept the Developer Agreement, submit; GitHub onboarding staff follow up before publication.",
+    "reviewTime": "None from GitHub for registration/installation. Org-owner approvals are human-paced (minutes to days). GitHub docs do not publish a Marketplace review SLA.",
+    "reviewerAsksFor": [
+      "Org owners: the list of permissions/scopes the app requests (shown on the approval/installation screen) and which repositories it will access.",
+      "Marketplace: valid publisher contact, privacy policy link, support link or email, logo/feature card/screenshots, description free of errors, webhook handling for plan changes.",
+      "Marketplace paid plans: verified publisher organization, 100+ installations (GitHub App) or 200+ users (OAuth App), handling of purchase/upgrade/downgrade/cancellation/free-trial events, monthly and annual billing."
+    ],
+    "commonRejections": [
+      "Marketplace: app provides no value beyond authentication, or is not publicly available.",
+      "Marketplace: missing privacy policy, support channel, or publisher contact information.",
+      "Marketplace: listing copy or images not meeting GitHub's guidelines, or content that steers users away from GitHub.",
+      "Marketplace paid plan: owner is not a verified publisher or installation/user thresholds not met.",
+      "Org approval: owners decline OAuth apps requesting the broad repo scope when a GitHub App with narrower permissions would do."
+    ],
+    "source": "https://docs.github.com/en/apps/github-marketplace/creating-apps-for-github-marketplace/requirements-for-listing-an-app"
+  },
+  "nuances": [
+    {
+      "title": "Callback URL matching changed in 2026",
+      "detail": "Wildcard matching is now a per-callback-URL toggle. Off: redirect_uri must exactly match. On: host (excluding subdomains) and port must match and the path must be a subdirectory, which lets any subdomain receive codes, so only enable it if you control them all. Apps with one callback registered before 2026-08-03 still have it on. Loopback redirects may vary the port.",
+      "source": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps"
+    },
+    {
+      "title": "Three token lifetimes to track",
+      "detail": "Installation tokens: 1 hour. GitHub App user tokens: 8 hours with a 6-month refresh token (unless you untick Expire user authorization tokens). OAuth App user tokens: non-expiring by default, 8-hour + refresh only if you request offline_access. A refresh invalidates both the old access token and the refresh token.",
+      "source": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app"
+    },
+    {
+      "title": "Org OAuth-app restrictions are on by default and do not affect GitHub Apps",
+      "detail": "Unapproved OAuth apps cannot read private org resources, receive private-repo webhooks, or perform privileged writes on public org resources. GitHub Apps are governed instead by which repositories the owner granted at install time.",
+      "source": "https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions"
+    },
+    {
+      "title": "Rate limits favor GitHub Apps",
+      "detail": "User tokens (OAuth App or GitHub App) share the user's 5,000 req/hour. Installation tokens get 5,000/hour plus 50/hour per repository and per org user beyond 20, capped at 12,500 (15,000 on Enterprise Cloud). Secondary limits: 100 concurrent requests, 900 REST points/min, roughly 80 content-creating requests/min and 500/hour, 2,000 OAuth token requests/hour per app. Unauthenticated: 60/hour.",
+      "source": "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api"
+    },
+    {
+      "title": "Installing is not the same as authorizing",
+      "detail": "Installing a GitHub App grants the app (bot) access to repos; a user access token additionally requires the user to authorize the app, either during install (if 'Request user authorization during installation' is on) or via a separate web/device flow. User tokens are limited by both the app's permissions and the user's own permissions.",
+      "source": "https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/about-creating-github-apps"
+    },
+    {
+      "title": "OAuth App scopes shrink silently",
+      "detail": "Users may grant fewer scopes than requested and can revoke individual scopes later; returning users skip the scope prompt and get previously granted scopes. Inspect X-OAuth-Scopes on responses rather than assuming the requested set.",
+      "source": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps"
+    },
+    {
+      "title": "Manifest registration still needs one human click",
+      "detail": "The app-manifest flow lets an agent prefill name, URLs, permissions and events, but a logged-in human must submit the form and click Create GitHub App; the code returned must be converted within 1 hour or the registration is lost.",
+      "source": "https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest"
+    },
+    {
+      "title": "Per-user token caps on OAuth Apps",
+      "detail": "A user can hold at most 10 tokens per user/app/scope combination and create at most 10 per hour; exceeding the hourly cap re-prompts authorization. Revoking an app also deletes any SSH/deploy keys it created.",
+      "source": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps"
+    }
+  ],
+  "blockers": [
+    {
+      "blocker": "OAuth App returns 404/403 on private org repos even though the user has access (org has OAuth app access restrictions enabled).",
+      "workaround": "User authorizes the app personally, then Settings -> Applications -> Authorized OAuth Apps -> Request access next to the org; an org owner approves from Organization settings -> Third-party access. Better: migrate to a GitHub App, which is exempt from this policy."
+    },
+    {
+      "blocker": "Non-owner cannot install the GitHub App on the organization; the Install button becomes a request.",
+      "workaround": "Submit the installation request (owners get notified) or have a repo admin install it if the app requests no org-level or repository-administration permissions and the org allows repo-admin installs. Otherwise an org owner must click Install."
+    },
+    {
+      "blocker": "redirect_uri_mismatch during the user flow.",
+      "workaround": "Register the exact redirect (including Composio's https://backend.composio.dev/api/v3/toolkits/auth/callback if applicable) as a callback URL; do not add extra query parameters; check whether wildcard matching is enabled for that URL and use 127.0.0.1 rather than localhost for loopback."
+    },
+    {
+      "blocker": "device_flow_disabled when a headless agent tries the device flow.",
+      "workaround": "A human ticks Enable Device Flow in the app settings; no other change is needed."
+    },
+    {
+      "blocker": "Installation token requests fail or tokens stop working after an hour.",
+      "workaround": "Installation tokens expire after 1 hour by design; re-mint with a fresh JWT before each batch of work or use an Octokit SDK that auto-refreshes. Verify the JWT is sent as Authorization: Bearer."
+    },
+    {
+      "blocker": "Marketplace listing cannot offer a paid plan.",
+      "workaround": "Transfer the app to an organization, complete publisher verification, reach 100 installations (GitHub App) or 200 users (OAuth App), add purchase-event webhook handling, then add the plan; publish as free in the meantime."
+    }
+  ],
+  "agentPlan": {
+    "agentDoes": [
+      "Decide GitHub App vs OAuth App and draft the full configuration: name, homepage, callback URLs (including the Composio callback when relevant), webhook URL/secret, minimal fine-grained permissions, and events; optionally serialize it as a GitHub App manifest and prepare the POST form.",
+      "Exchange the manifest conversion code at POST /app-manifests/{code}/conversions and persist id, client_id, client_secret, pem, webhook_secret.",
+      "Implement JWT signing, installation discovery and POST /app/installations/{id}/access_tokens with repository and permission narrowing.",
+      "Implement the web and/or device authorization flows, state verification, token refresh, and rate-limit backoff using x-ratelimit-reset / retry-after.",
+      "Draft the Marketplace listing copy, privacy policy and support page text."
+    ],
+    "humanDoes": [
+      "Log in to GitHub and click Create GitHub App / Register application (manifest flow still needs this click).",
+      "Click Generate a new client secret and Generate a private key, and move them into the secret store.",
+      "Tick Enable Device Flow, Expire user authorization tokens, and Request user authorization during installation as decided.",
+      "Install the app on the target account/organization or, if not an org owner, submit the installation request and chase an owner.",
+      "For OAuth Apps, request and obtain org-owner approval under OAuth app access restrictions.",
+      "Accept the GitHub Marketplace Developer Agreement and complete publisher verification for paid plans."
+    ]
+  },
+  "evidence": {
+    "sources": [
+      { "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps", "title": "Differences between GitHub Apps and OAuth apps", "confidence": "documented", "note": "GitHub recommends GitHub Apps; permission granularity, token types, org policy exemption, rate limit scaling." },
+      { "url": "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app", "title": "Registering a GitHub App", "confidence": "documented", "note": "Console path, 100-app limit, 34-char name, up to 10 callback URLs, expire-user-tokens default, device flow toggle, install scope option." },
+      { "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app", "title": "Creating an OAuth app", "confidence": "documented", "note": "OAuth App form fields, up to 10 callback URLs, Enable Device Flow, 100-app limit." },
+      { "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps", "title": "Authorizing OAuth apps", "confidence": "documented", "note": "Web flow, callback wildcard-matching rules (2026-08-03 default change), loopback port rule, device flow endpoints/limits, gho_/ghr_ prefixes, offline_access, 10-token cap." },
+      { "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps", "title": "Scopes for OAuth apps", "confidence": "documented", "note": "Scope descriptions, normalization, users can reduce scopes." },
+      { "url": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app", "title": "Generating a user access token for a GitHub App", "confidence": "documented", "note": "8-hour user tokens, 6-month refresh, redirect_uri must match a callback URL and carry no extra params, device flow for GitHub Apps." },
+      { "url": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app", "title": "Generating an installation access token for a GitHub App", "confidence": "documented", "note": "JWT -> installation id -> POST access_tokens; 1-hour expiry; repository/permission narrowing; ghs_APPID_JWT format from 2026-04-27." },
+      { "url": "https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest", "title": "Registering a GitHub App from a manifest", "confidence": "documented", "note": "Manifest fields, 1-hour conversion window, human must click Create GitHub App." },
+      { "url": "https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/about-creating-github-apps", "title": "About creating GitHub Apps", "confidence": "documented", "note": "Private vs public apps, user vs installation token patterns, GitHub App manager role." },
+      { "url": "https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions", "title": "About OAuth app access restrictions", "confidence": "documented", "note": "Enabled by default for new orgs; what unapproved OAuth apps lose; owners approve." },
+      { "url": "https://docs.github.com/en/account-and-profile/how-tos/organization-membership/requesting-organization-approval-for-oauth-apps", "title": "Requesting organization approval for OAuth apps", "confidence": "documented", "note": "Member request steps; must authorize personally first." },
+      { "url": "https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/limiting-oauth-app-and-github-app-access-requests-and-installations", "title": "Limiting OAuth app and GitHub App access requests and installations", "confidence": "documented", "note": "Members request GitHub App installs; repo-admin self-install rules; owners can disable requests." },
+      { "url": "https://docs.github.com/en/apps/github-marketplace/github-marketplace-overview/about-github-marketplace-for-apps", "title": "About GitHub Marketplace for apps", "confidence": "documented", "note": "Free vs paid listing, verified publisher, Developer Agreement, submit-for-publication step." },
+      { "url": "https://docs.github.com/en/apps/github-marketplace/creating-apps-for-github-marketplace/requirements-for-listing-an-app", "title": "Requirements for listing an app on GitHub Marketplace", "confidence": "documented", "note": "Publisher contact, privacy policy, support, webhooks, 100 installations / 200 users for paid apps." },
+      { "url": "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api", "title": "Rate limits for the REST API", "confidence": "documented", "note": "5,000/hr user, installation scaling to 12,500, 15,000 Enterprise Cloud, secondary limits." },
+      { "url": "https://docs.composio.dev/toolkits/managed-auth", "title": "Composio managed auth toolkits", "confidence": "documented", "note": "GITHUB listed under Composio-managed OAuth available." },
+      { "url": "https://docs.composio.dev/docs/custom-auth-configs", "title": "Composio custom auth configs", "confidence": "documented", "note": "Callback URL https://backend.composio.dev/api/v3/toolkits/auth/callback; must exactly match oauth_redirect_uri." }
+    ],
+    "tested": [
+      "Opened every docs.github.com page listed above on 2026-10-23; all resolved (the older /apps/github-marketplace/listing-an-app-on-github-marketplace/requirements-for-listing-an-app and /apps/oauth-apps/using-oauth-apps/requesting-organization-approval-for-oauth-apps paths now 404 and were replaced by the current URLs).",
+      "Confirmed the authorizing-oauth-apps page documents per-callback wildcard matching with the 2026-08-03 default change and loopback port flexibility.",
+      "Confirmed the installation-token page states a 1-hour expiry and the ghs_APPID_JWT stateless format effective 2026-04-27.",
+      "Confirmed docs.composio.dev/toolkits/managed-auth lists GITHUB under Composio-managed OAuth available."
+    ],
+    "unverified": [
+      "Did not register a real GitHub App or OAuth App or run a token exchange in this session; UI labels are taken from the docs.",
+      "Whether the manifest conversion response includes client_id as well as client_secret (docs say a client secret is generated and list id/pem/webhook_secret; client_id not explicitly listed on the page read).",
+      "GitHub Marketplace review duration: GitHub docs give no SLA, so no estimate is provided.",
+      "JWT maximum lifetime (commonly cited as 10 minutes) was not confirmed on the pages read."
+    ]
+  },
+  "meta": {
+    "generatedBy": "research-agent",
+    "generatedAt": "2026-10-23",
+    "version": 1
+  }
+}

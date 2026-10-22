@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f6f7f4;
+  --surface: #ffffff;
+  --ink: #151b18;
+  --muted: #5d6963;
+  --line: #d8ddd8;
+  --line-strong: #b9c1bb;
+  --primary: #1c5b4a;
+  --primary-ink: #ffffff;
+  --easy: #2f8f5b;
+  --moderate: #d49a1e;
+  --hard: #d8632a;
+  --very-hard: #a3243b;
+  --agent: #2b6cb0;
+  --human: #8a4bb8;
+  --assisted: #c47a12;
+  --wash: #eef1ec;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1412;
+    --surface: #161c19;
+    --ink: #e8ece9;
+    --muted: #97a39c;
+    --line: #273029;
+    --line-strong: #3a4740;
+    --primary: #4fbf9a;
+    --primary-ink: #0f1412;
+    --wash: #1b2320;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-ink: var(--primary-ink);
+  --color-easy: var(--easy);
+  --color-moderate: var(--moderate);
+  --color-hard: var(--hard);
+  --color-very-hard: var(--very-hard);
+  --color-agent: var(--agent);
+  --color-human: var(--human);
+  --color-assisted: var(--assisted);
+  --color-wash: var(--wash);
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { animation: none !important; transition: none !important; } }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.prose-tight p { max-width: 72ch; }
+
+/* The difficulty blaze: a small painted trail marker. */
+.blaze { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 2px; transform: rotate(45deg); flex: none; }
+.blaze-easy { background: var(--easy); }
+.blaze-moderate { background: var(--moderate); }
+.blaze-hard { background: var(--hard); }
+.blaze-very-hard { background: var(--very-hard); }
+
+.text-easy { color: var(--easy); } .text-moderate { color: var(--moderate); } .text-hard { color: var(--hard); } .text-very-hard { color: var(--very-hard); }
+
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.pulse { animation: pulse-dot 1.2s ease-in-out infinite; }

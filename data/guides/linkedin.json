@@ -1,0 +1,317 @@
+{
+  "slug": "linkedin",
+  "name": "LinkedIn",
+  "website": "https://www.linkedin.com/developers",
+  "category": "Social",
+  "summary": "Creating a LinkedIn app and getting a 60-day token for Sign In with LinkedIn (OpenID Connect) or Share on LinkedIn is self-serve and takes about 20 minutes, but you must attach the app to a Company Page whose super admin verifies it. Everything beyond posting as the member (Company Page posting/analytics, ads, lead forms) requires an access-request form, business vetting, and a review that takes weeks, is restricted to registered legal organizations, can only be re-applied for with a brand-new app, and still does not expose connections, people search, or feeds.",
+  "composio": {
+    "managedAuthAvailable": true,
+    "toolkitSlug": "LINKEDIN",
+    "note": "LinkedIn (LINKEDIN) is under Composio-managed auth. The separate LINKEDIN_ADS toolkit is bring-your-own only. If you register your own app, add https://backend.composio.dev/api/v3/toolkits/auth/callback as an Authorized redirect URL on the app's Auth tab and set the same oauth_redirect_uri in the Composio auth config."
+  },
+  "verdict": {
+    "difficulty": "hard",
+    "difficultyReason": "The self-serve products (OIDC sign-in, w_member_social posting) are easy, but any Company Page, Advertising, or Community Management use case needs a Page super admin verification, a verified business email and legal entity, a 21-day vetting survey, a multi-week manual review, and (for Community Management) a separate Standard-tier review with a screencast; refresh tokens are only issued to approved Marketing Developer Platform partners.",
+    "handsOnMinutes": { "min": 20, "max": 90 },
+    "approvalWait": {
+      "required": "conditional",
+      "minDays": 0,
+      "maxDays": 42,
+      "note": "0 days for Sign In with LinkedIn using OpenID Connect and Share on LinkedIn. Advertising API, Community Management API, Lead Sync, Conversions, Matched Audiences, and Events Management all require a reviewed access request; LinkedIn publishes no SLA for Development tier (community reports 1-4 weeks) and states up to 30 business days for the Advertising Standard-tier upgrade."
+    },
+    "timeToFirstToken": "About 20 minutes for OIDC/Share scopes via the Developer Portal token generator; weeks for any Marketing product"
+  },
+  "prerequisites": [
+    {
+      "text": "A LinkedIn member account and a LinkedIn Company Page. API products require you to select a default Page during app creation, and apps are permanently tied to that Page (not transferable).",
+      "blocking": true,
+      "source": "https://www.linkedin.com/help/linkedin/answer/a548360/associate-an-app-with-a-linkedin-page"
+    },
+    {
+      "text": "Access to the Page's super admin, who must approve the app verification link within 30 days.",
+      "blocking": true,
+      "source": "https://www.linkedin.com/help/learning/answer/a1665329"
+    },
+    {
+      "text": "An absolute HTTPS redirect URL with no fragment (query parameters are stripped).",
+      "blocking": true,
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow"
+    },
+    {
+      "text": "For Community Management / Advertising: a registered legal organization with a verifiable business email (personal emails fail vetting), legal name, registered address, website on the same domain, and a privacy policy URL.",
+      "blocking": false,
+      "source": "https://learn.microsoft.com/en-us/linkedin/marketing/community-management-app-review"
+    },
+    {
+      "text": "For Community Management: the app must have no other products provisioned or pending (the request button is greyed out otherwise), so plan a dedicated app.",
+      "blocking": false,
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/linkedin-api-partner-support-guide"
+    }
+  ],
+  "steps": [
+    {
+      "id": "page",
+      "title": "Create or identify the Company Page",
+      "detail": "Every API-enabled app must be associated with a LinkedIn Page that acts as its publisher. If your organization has no Page, create one first; the Page's super admin will be needed in step 3.",
+      "who": "human",
+      "portalUrl": "https://www.linkedin.com/company/setup/new/",
+      "source": "https://learn.microsoft.com/en-us/linkedin/marketing/quick-start"
+    },
+    {
+      "id": "create-app",
+      "title": "Create the app in the Developer Portal",
+      "detail": "Go to My Apps > Create app, enter the app name, select the Company Page, upload a logo, and accept the API Terms. The app name must not include LinkedIn, Linked, In, or Microsoft marks.",
+      "who": "assisted",
+      "portalUrl": "https://www.linkedin.com/developers/apps/new",
+      "tips": ["Create one app per product family: Community Management must be the only product on its app, so keep it separate from an app that has Share or Advertising."],
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/linkedin-api-partner-support-guide"
+    },
+    {
+      "id": "verify",
+      "title": "Get the Page super admin to verify the app",
+      "detail": "Open the app's Settings tab, click Verify, click Generate URL, and send the link to the Page super admin. They have 30 days to approve; a denial invalidates every generated link for that app. The Marketing access forms will not proceed without a verified app.",
+      "who": "human",
+      "portalUrl": "https://www.linkedin.com/developers/apps",
+      "tips": ["An agent can generate and draft the email with the URL, but only a Page super admin can click approve."],
+      "source": "https://www.linkedin.com/help/learning/answer/a1665329"
+    },
+    {
+      "id": "auth-tab",
+      "title": "Record credentials and add redirect URLs",
+      "detail": "On the Auth tab copy the Client ID and Primary Client Secret and add each Authorized redirect URL. URLs must be absolute HTTPS, cannot contain a #, and query parameters are ignored; the redirect_uri in the authorize request must match one exactly or you get a 401 redirect_uri mismatch.",
+      "who": "agent",
+      "portalUrl": "https://www.linkedin.com/developers/apps",
+      "tips": [
+        "Add https://backend.composio.dev/api/v3/toolkits/auth/callback if Composio will run the flow.",
+        "Postman users can register https://oauth.pstmn.io/v1/callback."
+      ],
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow"
+    },
+    {
+      "id": "products",
+      "title": "Add the self-serve products",
+      "detail": "On the Products tab request Sign In with LinkedIn using OpenID Connect (grants openid, profile, email) and Share on LinkedIn (grants w_member_social). These are provisioned immediately without review and appear on the Auth tab's scope list.",
+      "who": "assisted",
+      "portalUrl": "https://www.linkedin.com/developers/apps",
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/getting-access"
+    },
+    {
+      "id": "first-token",
+      "title": "Mint a test token and call /v2/userinfo",
+      "detail": "Use the Developer Portal Token Generator (select app, 3-legged flow, scopes) or run the authorization-code flow against https://www.linkedin.com/oauth/v2/authorization and POST the code to https://www.linkedin.com/oauth/v2/accessToken. The response has expires_in=5184000 (60 days). Verify with GET https://api.linkedin.com/v2/userinfo.",
+      "who": "assisted",
+      "portalUrl": "https://www.linkedin.com/developers/tools/oauth/token-generator",
+      "tips": ["The authorization code expires after 30 minutes; exchange it immediately.", "Use the Token Inspector to see TTL and scopes of any token your app issued."],
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/developer-portal-tools"
+    },
+    {
+      "id": "apply-marketing",
+      "title": "Apply for a Marketing product (if needed)",
+      "detail": "On the Products tab click Request access on Advertising API, Community Management API, Lead Sync, Conversions, Events Management, or Matched Audiences, then complete the access form and the auto-generated vetting survey within 21 days. Provide the legal entity details, business email (verified by link), website, privacy policy, and a specific description of what data is read, by whom, and why.",
+      "who": "assisted",
+      "portalUrl": "https://www.linkedin.com/developers/apps",
+      "tips": ["Read restricted-use-cases first: anything that smells like lead generation, prospecting, recruiting, CRM enrichment, or data export is rejected.", "Advertising API access is a prerequisite for Matched Audiences, Audience Insights, and Media Planning."],
+      "source": "https://learn.microsoft.com/en-us/linkedin/marketing/increasing-access"
+    },
+    {
+      "id": "dev-tier",
+      "title": "Build against the Development tier",
+      "detail": "Once approved you start in Development tier. Community Management is capped at 500 calls per app and 100 per member per 24 h, with BATCH_GET and webhooks disabled, and you must finish integration within 12 months. Advertising Development tier allows unlimited reads but edits on only 5 ad accounts, which you map under Products > View Ad Accounts.",
+      "who": "agent",
+      "source": "https://learn.microsoft.com/en-us/linkedin/marketing/increasing-access"
+    },
+    {
+      "id": "versioned-calls",
+      "title": "Call versioned endpoints with the right headers",
+      "detail": "Marketing endpoints live under https://api.linkedin.com/rest/ and require Linkedin-Version: YYYYMM (currently 202610) and X-Restli-Protocol-Version: 2.0.0. A missing or sunset version header returns an error; each monthly version is supported for at least one year.",
+      "who": "agent",
+      "source": "https://learn.microsoft.com/en-us/linkedin/marketing/versioning"
+    },
+    {
+      "id": "standard-tier",
+      "title": "Upgrade to Standard tier for production",
+      "detail": "Submit the Standard tier form (Community Management) or a support ticket (Advertising) with a company/product overview, test credentials, and a high-resolution, narrated, downloadable screencast that demonstrates the complete OAuth flow and every use case you claimed. Advertising upgrades can take up to 30 business days; only apps creating ads for more than 5 accounts need it.",
+      "who": "assisted",
+      "portalUrl": "https://www.linkedin.com/help/linkedin/ask/dsapi",
+      "tips": ["If rejected you cannot re-apply with the same app; you must create a new app and start from the Development tier form."],
+      "source": "https://learn.microsoft.com/en-us/linkedin/marketing/community-management-app-review"
+    },
+    {
+      "id": "refresh",
+      "title": "Plan for token expiry",
+      "detail": "Tokens last 60 days. Programmatic refresh tokens (365-day TTL, grant_type=refresh_token) are issued only to approved Marketing Developer Platform partners; everyone else must re-run the authorization flow, which is silent only while the member is still logged in and the old token has not expired. Requesting a different scope set invalidates all prior tokens.",
+      "who": "agent",
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/programmatic-refresh-tokens"
+    }
+  ],
+  "scopes": {
+    "note": "Scopes are not requested individually; they come bundled with Products added on the app's Products tab, and the Auth tab shows what your app may request. Members must consent to all requested scopes at once. Only the three OIDC scopes and w_member_social are open to every developer; every Marketing scope is unlocked by an approved product application, and Sales Navigator, Talent, and Compliance scopes need partner programs or are closed.",
+    "examples": [
+      { "scope": "openid", "purpose": "OpenID Connect sign-in, returns an ID token (Sign In with LinkedIn using OpenID Connect)", "triggersReview": false },
+      { "scope": "profile", "purpose": "Member name, headline, photo via /v2/userinfo", "triggersReview": false },
+      { "scope": "email", "purpose": "Member primary email (may be absent in the response)", "triggersReview": false },
+      { "scope": "w_member_social", "purpose": "Post, comment, like as the member (Share on LinkedIn; 150 requests/member/day)", "triggersReview": false },
+      { "scope": "w_organization_social", "purpose": "Post as a Company Page; requires Community Management or Advertising API approval", "triggersReview": true },
+      { "scope": "r_organization_social", "purpose": "Read Page posts and engagement; Community Management / Advertising approval", "triggersReview": true },
+      { "scope": "rw_ads", "purpose": "Manage ad accounts and campaigns; Advertising API approval and a Campaign Manager role", "triggersReview": true },
+      { "scope": "r_1st_connections_size", "purpose": "Only the count of 1st-degree connections; full connection lists (r_1st_connections) are restricted to approved partners", "triggersReview": true }
+    ]
+  },
+  "approval": {
+    "required": "conditional",
+    "triggers": [
+      "Requesting any Marketing product: Advertising API, Community Management API, Lead Sync API, Conversions API, Matched Audiences API, Events Management API",
+      "Upgrading from Development to Standard tier (Community Management form with screencast; Advertising via support ticket with demo video)",
+      "Restricted programs: Audience Insights and Media Planning (application survey, no fixed timeline), Sales Navigator (SNAP partner), Talent (ATS partner); Company Intelligence and Compliance are closed to new applicants",
+      "Programmatic refresh tokens (granted only to approved Marketing Developer Platform partners)"
+    ],
+    "process": "Add the product on the Products tab, submit the access request form, then complete the auto-generated vetting survey in the Developer Portal within 21 days (otherwise the request is marked Insufficient Details and a Reapply option appears). LinkedIn verifies the business email by link, the legal organization, its website/domain, and that a Page super admin has verified the app, then grants Development tier. After building, submit the Standard tier form with test credentials and a narrated screencast; LinkedIn reviews for approved use case, privacy policy, terms/security/data-storage compliance, and that the recording shows all core functionality. Denials for identity vetting can be appealed via the Developer Support contact form (Form Type: Vetting Appeal).",
+    "reviewTime": "Official: no SLA published for Development or Community Management Standard tier; Advertising Standard-tier upgrade 'can take up to 30 business days'; vetting survey must be completed within 21 days. Community-observed: 1-4 weeks for Development tier, longer when business details are inconsistent (inferred from third-party consultancies, not official).",
+    "reviewerAsksFor": [
+      "Verified business email on your company domain (personal addresses fail)",
+      "Organization legal name, registered address, website, and privacy policy URL",
+      "App verified by a super admin of the Company Page belonging to the same organization",
+      "Specific, approved use case (page management, brand engagement, page analytics, executive management, employee advocacy for Community Management)",
+      "Standard tier: company/product overview, test credentials for the reviewer, and a high-resolution downloadable screencast showing the full OAuth flow, posting, how commenter personal data is displayed, and every claimed use case",
+      "Advertising Standard tier: demo video (Google Drive or SharePoint link) of campaign creation, editing, and optimization across more than 5 ad accounts"
+    ],
+    "commonRejections": [
+      "Restricted use case: lead generation, prospecting, recruiting, CRM enrichment, audience building, ad targeting from member data, or mass messaging",
+      "Social-feed use case (displaying a feed of company updates on a website or intranet)",
+      "Personal email, unregistered entity, or mismatch between legal name, website domain, and Page (solo developers and side projects are not eligible for Community Management)",
+      "App not verified by the Page super admin, or Page belongs to a different organization",
+      "App name or logo containing LinkedIn, Linked, In, or Microsoft marks",
+      "Incomplete access form or vetting survey not submitted within 21 days",
+      "Screencast missing a required test case, low resolution, not downloadable, or showing other windows",
+      "Advertising tier-upgrade requests for analytics-only use cases (explicitly rejected; reads are unlimited in Development tier)",
+      "Requesting Community Management on an app that already has other products (button greyed out)"
+    ],
+    "source": "https://learn.microsoft.com/en-us/linkedin/marketing/community-management-app-review"
+  },
+  "nuances": [
+    {
+      "title": "Rejection means a brand-new app",
+      "detail": "If a Development or Standard tier request is rejected you cannot re-apply with the same app; you must create a new app, get it Page-verified again, and resubmit. Only the Insufficient Details path (survey not completed) offers a Reapply button on the existing app.",
+      "source": "https://learn.microsoft.com/en-us/linkedin/marketing/community-management-app-review"
+    },
+    {
+      "title": "60-day tokens and no refresh for most developers",
+      "detail": "All access tokens are issued with expires_in=5184000 (60 days). Programmatic refresh tokens (365 days, with a daily refresh quota shown on the Analytics tab) are only enabled for approved Marketing Developer Platform partners. Everyone else must send the member back through the authorize URL; it redirects silently only while the member is logged in and the old token has not expired.",
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/programmatic-refresh-tokens"
+    },
+    {
+      "title": "Redirect URL matching is strict",
+      "detail": "Redirect URLs must be absolute HTTPS, cannot include a #, and any query string is discarded, so a dynamic state must go in the state parameter, not the URL. A mismatch returns 401 Redirect_uri does not match; changing scopes forces every member to re-authenticate.",
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow"
+    },
+    {
+      "title": "Versioned Marketing APIs require Linkedin-Version",
+      "detail": "Endpoints under /rest need Linkedin-Version: YYYYMM (latest 202610) plus X-Restli-Protocol-Version: 2.0.0. There is no default version; missing or sunset headers error. Versions ship monthly and are supported at least one year (202511 sunsets November 16, 2026), so budget an annual migration. Legacy /v2 endpoints (ugcPosts, userinfo) remain unversioned.",
+      "source": "https://learn.microsoft.com/en-us/linkedin/marketing/versioning"
+    },
+    {
+      "title": "Development tier is tiny and time-boxed",
+      "detail": "Community Management Development tier allows 500 calls per app and 100 per member per 24 hours, disables BATCH_GET and webhooks, and must be completed within 12 months. Advertising Development tier allows unlimited reads and 1 test ad account creation but edits on at most 5 ad accounts.",
+      "source": "https://learn.microsoft.com/en-us/linkedin/marketing/increasing-access"
+    },
+    {
+      "title": "Rate limits are per app and per member, per UTC day, and mostly unpublished",
+      "detail": "Share on LinkedIn documents 150 requests per member and 100,000 per app per day; other endpoints' limits are only visible on the app's Analytics tab after you make at least one call. Exceeding returns 429; admins get email alerts at 75% of app quota with a 1-2 hour delay.",
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/api-guide/concepts/rate-limits"
+    },
+    {
+      "title": "Many obvious endpoints do not exist for you",
+      "detail": "There is no people search, no reading of other members' profiles, no 2nd-degree connections, no feed, and no messaging. The Connections API (r_1st_connections) and People Typeahead are restricted to LinkedIn-approved partners; Compliance scopes are closed; Sales Navigator and Talent need partner programs. Member data from Community Management may be stored at most 24-48 hours and never exported.",
+      "source": "https://learn.microsoft.com/en-us/linkedin/shared/integrations/people/connections-api"
+    },
+    {
+      "title": "Apps are welded to one Page",
+      "detail": "The Page association cannot be transferred. If the Page is deactivated or the company rebrands/merges, you must create new apps (and re-apply for products) under the new Page.",
+      "source": "https://www.linkedin.com/help/linkedin/answer/a548360/associate-an-app-with-a-linkedin-page"
+    }
+  ],
+  "blockers": [
+    {
+      "blocker": "You cannot reach a super admin of the Company Page, so the app never gets verified and Marketing access forms cannot be submitted.",
+      "workaround": "Have a Page admin promoted to super admin, or for a solo developer create your own Company Page and make yourself super admin; for OIDC and Share only, verification is not required to mint tokens."
+    },
+    {
+      "blocker": "Your use case is lead generation, prospecting, CRM enrichment, or recruiting, which LinkedIn explicitly rejects and does not expose endpoints for.",
+      "workaround": "Reframe around an approved use case (page management, analytics, employee advocacy) and keep member data in-app for 24-48 hours max; for lead capture use Lead Sync API (ad lead forms) or the Advertising API, or rely on member-authorized export via Member Data Portability (EEA/Switzerland only)."
+    },
+    {
+      "blocker": "Tokens expire after 60 days and you are not an MDP partner, so background jobs break without a human re-consenting.",
+      "workaround": "Schedule a re-authorization prompt before day 60 (silent if the member is still logged in and the token is unexpired), store the token TTL from the Token Inspector/introspection endpoint, and surface a reconnect UI; apply for Marketing Developer Platform partnership if refresh tokens are essential."
+    },
+    {
+      "blocker": "Community Management request button is greyed out because the app already has Share or Advertising products.",
+      "workaround": "Create a second app under the same Company Page with no other products, apply for Community Management there, and after approval reference its client ID in the Standard tier form for the production app."
+    },
+    {
+      "blocker": "Development tier's 500 calls/day per app and no webhooks make it impossible to run a real pilot customer.",
+      "workaround": "Finish the integration with internal test data, record the screencast, and submit the Standard tier form as early as possible; keep the pilot to a handful of members (100 calls per member per day)."
+    },
+    {
+      "blocker": "An access request was rejected and the Reapply button is absent.",
+      "workaround": "Create a new app (new Page verification), fix the specific gap (business email domain, privacy policy, use case wording), and resubmit the Development tier form; for identity-vetting denials file a Vetting Appeal through the Developer Support form."
+    }
+  ],
+  "agentPlan": {
+    "agentDoes": [
+      "Draft the app name/description, prepare the logo, and fill the Create app form fields for the human to submit.",
+      "Generate the verification URL text and the email to the Page super admin; track the 30-day deadline.",
+      "Configure redirect URLs (including the Composio callback), implement the authorization-code flow with state/CSRF checks, the 30-minute code exchange, and 60-day expiry tracking with re-auth prompts.",
+      "Write the access-request form answers and vetting survey responses in plain, specific language mapped to an approved use case; pre-check against restricted-use-cases.",
+      "Build against Development tier with Linkedin-Version headers, throttle to 500/100 daily caps, and script the Standard-tier screencast storyboard and test credentials."
+    ],
+    "humanDoes": [
+      "Log in to LinkedIn and click Create app, accept the API Terms, and request products on the Products tab.",
+      "Page super admin opens the verification URL and approves the association.",
+      "Verify the business email link, confirm legal-entity details, and submit the access form and vetting survey within 21 days.",
+      "Record and narrate the Standard-tier screencast; respond to reviewer follow-ups on the registered business email.",
+      "Re-consent in the browser whenever a 60-day token expires (non-MDP partners have no refresh tokens)."
+    ]
+  },
+  "evidence": {
+    "sources": [
+      { "url": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow", "title": "LinkedIn 3-Legged OAuth Flow", "confidence": "documented", "note": "Redirect URL rules, 30-minute auth code, 60-day tokens, error table, refresh via re-auth" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/programmatic-refresh-tokens", "title": "Refresh Tokens with OAuth 2.0", "confidence": "documented", "note": "Programmatic refresh only for approved MDP partners; 365-day refresh TTL" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/getting-access", "title": "Getting Access to LinkedIn APIs", "confidence": "documented", "note": "Open permissions: openid, profile, email, w_member_social; partner programs; Compliance closed" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/marketing/quick-start", "title": "Marketing API Quick Start", "confidence": "documented", "note": "Step 1: create a LinkedIn Page, create app, apply under Products tab" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/marketing/increasing-access", "title": "Increasing Access (tiers and permissions)", "confidence": "documented", "note": "Product/permission table, Development tier caps (500/100 per day), 12-month limit, Standard tier process" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/marketing/community-management-app-review", "title": "Community Management App Review", "confidence": "documented", "note": "Legal-entity requirement, business email, Page verification, screencast requirements, new app on rejection" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/marketing/restricted-use-cases", "title": "Restricted Uses of LinkedIn Marketing APIs and Data", "confidence": "documented", "note": "No sales/recruiting/lead-gen, no export, 24/48-hour storage, no social feeds" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/marketing/versioning", "title": "LMS API Versioning", "confidence": "documented", "note": "Linkedin-Version YYYYMM header, latest 202610, 1-year support, 202511 sunset Nov 16, 2026" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/shared/api-guide/concepts/rate-limits", "title": "LinkedIn API Rate Limiting", "confidence": "documented", "note": "App and member daily limits, unpublished, Analytics tab, 429, 75% alerts" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/developer-portal-tools", "title": "Developer Portal Tools", "confidence": "documented", "note": "Token generator, token inspector, refresh-token usage quota table" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2", "title": "Sign In with LinkedIn using OpenID Connect", "confidence": "documented", "note": "openid/profile/email scopes, /v2/userinfo, self-serve via Products tab" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/share-on-linkedin", "title": "Share on LinkedIn", "confidence": "documented", "note": "w_member_social self-serve; 150 requests/member/day, 100,000/app/day" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/shared/integrations/people/connections-api", "title": "Connections API", "confidence": "documented", "note": "Restricted to approved developers; no 2nd-degree connections" },
+      { "url": "https://learn.microsoft.com/en-us/linkedin/shared/linkedin-api-partner-support-guide", "title": "LinkedIn API Partner Support", "confidence": "documented", "note": "21-day vetting survey, Reapply flow, Community Management must be sole product, Ads upgrade up to 30 business days, vetting appeals" },
+      { "url": "https://www.linkedin.com/help/linkedin/answer/a548360/associate-an-app-with-a-linkedin-page", "title": "Associate an app with a LinkedIn Page", "confidence": "documented", "note": "Super admin approves within 30 days; apps tied permanently to one Page; default Page required at app creation" },
+      { "url": "https://www.linkedin.com/help/learning/answer/a1665329", "title": "Send an app verification request for a LinkedIn Page", "confidence": "documented", "note": "Settings > Verify > Generate URL; 30 days; denial invalidates all links" },
+      { "url": "https://singhamandeep.com/?p=1387", "title": "LinkedIn API Access and Approval (third-party consultancy)", "confidence": "inferred", "note": "Source of the 1-4 week community-observed review time and 'solo developers not eligible' claim; seen via search summary only" },
+      { "url": "https://docs.composio.dev/toolkits/managed-auth", "title": "Composio managed auth toolkits", "confidence": "documented", "note": "LINKEDIN listed as Composio-managed; LINKEDIN_ADS bring-your-own" },
+      { "url": "https://docs.composio.dev/docs/custom-auth-configs", "title": "Composio custom auth configs", "confidence": "documented", "note": "Redirect URI https://backend.composio.dev/api/v3/toolkits/auth/callback" }
+    ],
+    "tested": [
+      "Opened the authorization-code-flow, programmatic-refresh-tokens, getting-access, developer-portal-tools, rate-limits, connections-api, and partner-support pages on learn.microsoft.com and confirmed the quoted values (expires_in 5184000, 30-minute code, 365-day refresh TTL, 21-day survey, 30 business days for Ads upgrade).",
+      "Opened the Marketing quick-start, increasing-access, community-management-app-review, restricted-use-cases, and versioning pages (li-lms-2026-10) and confirmed the 500/100 Development-tier caps, the 12-month limit, the screencast requirements, the create-new-app-on-rejection rule, and the 202610 version header.",
+      "Opened the Sign In with LinkedIn (OIDC) and Share on LinkedIn pages and confirmed both are added self-serve from the Products tab and the 150/100,000 daily Share limits.",
+      "Opened LinkedIn Help articles a548360 and a1665329 and confirmed the Settings > Verify > Generate URL flow, the 30-day window, and that denial invalidates all links.",
+      "Opened docs.composio.dev/toolkits/managed-auth and confirmed LinkedIn is Composio-managed and Linkedin Ads is bring-your-own; confirmed the callback URI on the custom auth config page."
+    ],
+    "unverified": [
+      "Actual Development-tier review turnaround: LinkedIn publishes no SLA; the 1-4 week figure comes from third-party consultancies.",
+      "Whether the Community Management 'registered legal organizations only' rule is enforced identically for the Advertising API (the official page states it only for Community Management).",
+      "The exact set of fields required on the Create app form today (logo, privacy policy URL) was not inspected live because the portal requires login; the help article confirms a default Page must be selected.",
+      "Whether a Page super admin denial can be reversed or whether an approval can be revoked later (help article is silent).",
+      "The ugcPosts endpoint is still documented for Share on LinkedIn but Marketing docs steer to versioned /rest/posts; which one a brand-new self-serve app should use was not tested."
+    ]
+  },
+  "meta": {
+    "generatedBy": "research-agent",
+    "generatedAt": "2026-10-23",
+    "version": 1
+  }
+}

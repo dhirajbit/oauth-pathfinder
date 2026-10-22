@@ -1,0 +1,315 @@
+{
+  "slug": "meta",
+  "name": "Meta (Facebook Pages + Instagram Graph API)",
+  "website": "https://developers.facebook.com",
+  "category": "Social",
+  "summary": "A Meta app is live for yourself and anyone you give an app role in about 20 minutes, with every Pages/Instagram permission usable at Standard Access while the app stays in Development mode. Letting anyone else connect their Page or Instagram account requires Advanced Access, which means a per-permission App Review with screencasts, a verified Meta Business (legal documents), and for most Pages/Instagram permissions a separate Tech Provider 'access verification', with Meta's dashboard currently promising most reviews within ~10 days but developers reporting 2-3 weeks.",
+  "composio": {
+    "managedAuthAvailable": true,
+    "toolkitSlug": "FACEBOOK",
+    "note": "Both FACEBOOK and INSTAGRAM toolkits are listed under 'Composio-managed OAuth available' on docs.composio.dev/toolkits/managed-auth, so you can connect Pages/Instagram without your own Meta app for prototyping. For production with your own branding and quota, create a custom auth config and add https://backend.composio.dev/api/v3/toolkits/auth/callback to Valid OAuth Redirect URIs in your Meta app's Facebook Login settings."
+  },
+  "verdict": {
+    "difficulty": "hard",
+    "difficultyReason": "Registration is quick and there is no cost, but the moment users without an app role need to connect, you must (a) pass App Review per permission with screen recordings and reviewer-testable access, (b) complete Business Verification with legal documents matching your Business Manager name, (c) for pages_* and instagram_* permissions also pass Tech Provider access verification, and (d) keep a logged successful API call for each permission within 30 days before the 'Request advanced access' button even unlocks. Then an annual Data Use Checkup keeps it alive.",
+    "handsOnMinutes": { "min": 20, "max": 60 },
+    "approvalWait": {
+      "required": "conditional",
+      "minDays": 0,
+      "maxDays": 30,
+      "note": "None if only Administrators/Developers/Testers (up to 500 testers on a verified business, 50 otherwise) and up to 10 test users will use the app. For Advanced Access: Meta's submission guide says 'within a week', the App Review dashboard says most requests are reviewed within 10 days, and 2026 developer reports cite 13-20 days. Business Verification and Tech Provider access verification run in parallel; access verification decisions take 'approximately 5 days' per Meta."
+    },
+    "timeToFirstToken": "~20 min for yourself and anyone you assign an app role (Development mode, Standard Access); 2-4 weeks for public users once App Review + Business Verification + access verification all pass."
+  },
+  "prerequisites": [
+    { "text": "A personal Facebook account registered as a Meta Developer (developers.facebook.com/async/registration); every Administrator/Developer role holder needs one.", "blocking": true, "source": "https://developers.facebook.com/docs/development/build-and-test/app-roles" },
+    { "text": "A Facebook Page you admin and, for Instagram, an Instagram professional (business or creator) account linked to that Page (Facebook Login variant) or standalone (Instagram Login variant).", "blocking": true, "source": "https://developers.facebook.com/docs/instagram-platform/overview" },
+    { "text": "HTTPS redirect URI(s): Meta enforces HTTPS and Strict Mode exact matching for Valid OAuth Redirect URIs on all apps.", "blocking": true, "source": "https://developers.facebook.com/docs/facebook-login/security" },
+    { "text": "Privacy Policy URL, Terms of Service URL, 1024x1024 app icon, category, contact email and app purpose; ToS, icon, category, display name, contact email and purpose are required to switch to Live mode.", "blocking": true, "source": "https://developers.facebook.com/docs/development/create-an-app/app-dashboard/basic-settings" },
+    { "text": "A Meta Business Portfolio (Business Manager) with legal business name, address, phone, website and supporting documents, for Business Verification before any Advanced Access.", "blocking": false, "source": "https://developers.facebook.com/docs/development/release/business-verification" },
+    { "text": "A working product that reviewers can log into with their own test accounts (no personal credentials) and that has made at least one successful API call with each permission in the last 30 days.", "blocking": false, "source": "https://developers.facebook.com/docs/resp-plat-initiatives/individual-processes/app-review/submission-guide" }
+  ],
+  "steps": [
+    {
+      "id": "register-developer",
+      "title": "Register as a Meta Developer",
+      "detail": "Log in with a real Facebook account and complete developer registration (phone/email confirmation). This account becomes the first Administrator; fake or newly created accounts are frequently restricted, which would lock you out of the app.",
+      "who": "human",
+      "portalUrl": "https://developers.facebook.com/async/registration",
+      "source": "https://developers.facebook.com/docs/development/build-and-test/app-roles"
+    },
+    {
+      "id": "create-app",
+      "title": "Create an app (Business type / Other use case) and link it to a Business Portfolio",
+      "detail": "In the App Dashboard choose Create App, pick the use case that includes Facebook Login for Business / Pages / Instagram, name the app, and connect it to your Business Portfolio. New apps start in Development mode with Standard Access on all permissions available to the app type.",
+      "who": "assisted",
+      "portalUrl": "https://developers.facebook.com/apps/",
+      "tips": ["Link the app to the Business Portfolio at creation; once linked, roles must be managed through Business Manager and Business Verification later attaches to this business."],
+      "source": "https://developers.facebook.com/docs/development/build-and-test/app-modes"
+    },
+    {
+      "id": "basic-settings",
+      "title": "Fill in Basic Settings: Privacy Policy, Terms, Data Deletion, icon, category, App Domains",
+      "detail": "Settings > Basic: add Privacy Policy URL, Terms of Service URL (required for Live), User Data Deletion URL or callback, 1024x1024 icon without Meta trademarks, category, contact email and App Domains. Record the App ID and App Secret from this page.",
+      "who": "assisted",
+      "portalUrl": "https://developers.facebook.com/apps/",
+      "tips": ["Changing basic or advanced settings after submitting App Review may trigger a re-review; finish settings first."],
+      "source": "https://developers.facebook.com/docs/development/create-an-app/app-dashboard/basic-settings"
+    },
+    {
+      "id": "add-products",
+      "title": "Add Facebook Login (for Business) and the Instagram product; set Valid OAuth Redirect URIs",
+      "detail": "Add the Facebook Login product and under Settings paste every exact redirect URI (HTTPS, exact path and query; Strict Mode is mandatory). If using Composio with your own app, add https://backend.composio.dev/api/v3/toolkits/auth/callback. For Instagram choose 'Instagram API with Facebook Login' (Page-linked accounts, instagram_basic etc.) or 'Instagram API with Instagram Login' (no Page needed, instagram_business_* scopes).",
+      "who": "agent",
+      "portalUrl": "https://developers.facebook.com/apps/",
+      "tips": ["Dynamic redirect data must go in the state parameter; its value is ignored by the URI match.", "Redirect URIs are not needed for pure JavaScript SDK logins, but every server-side code exchange needs an exact entry."],
+      "source": "https://developers.facebook.com/docs/facebook-login/security"
+    },
+    {
+      "id": "add-roles",
+      "title": "Add app roles and/or test users for development",
+      "detail": "App Roles > Roles: invite teammates as Administrators/Developers (need Meta Developer accounts) or Testers (any Facebook user; up to 50 testers on an unlinked app, 500 on a business-verified one). Or create up to 10 synthetic test users and app-scoped test Pages. Role users can grant ANY permission at Standard Access while the app is in Development mode, so your own Pages/Instagram accounts work with no review.",
+      "who": "assisted",
+      "portalUrl": "https://developers.facebook.com/apps/",
+      "tips": ["Invitees must accept the role invite under Facebook Settings > Apps and Websites > Requests before they can log in to the app.", "Test users cannot interact with real Facebook users outside the role list and cannot be converted to real accounts."],
+      "source": "https://developers.facebook.com/docs/development/build-and-test/test-users"
+    },
+    {
+      "id": "run-oauth",
+      "title": "Run the OAuth flow and exchange for long-lived Page / Instagram tokens",
+      "detail": "Send the user through the Facebook Login dialog with the permissions (e.g. pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish), exchange the code for a short-lived user token (hours), exchange that server-side via grant_type=fb_exchange_token for a ~60-day long-lived token, then call /{user-id}/accounts to get Page tokens, which have no fixed expiry when derived from a long-lived user token.",
+      "who": "agent",
+      "tips": ["Make at least one successful API call with every permission you intend to submit; Meta requires a logged call within the last 30 days before 'Request advanced access' becomes clickable."],
+      "source": "https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived"
+    },
+    {
+      "id": "business-verification",
+      "title": "Complete Business Verification in Business Manager",
+      "detail": "App Dashboard > Settings > Basic > Verification > Start Verification (or Business Settings > Security Center). A Business Admin submits legal business name, address, phone, website and official documents (registration/incorporation, tax or utility documents) whose name and address exactly match the Business Portfolio details, then confirms via domain, email or phone. Required for all apps requesting Advanced Access since Feb 1, 2023; Individual Verification is no longer accepted.",
+      "who": "human",
+      "portalUrl": "https://business.facebook.com/settings/security",
+      "tips": ["Only a Business Admin (not merely an app Administrator) can complete it.", "Mismatched legal names between documents and Business Manager is the most common reason it bounces."],
+      "source": "https://developers.facebook.com/docs/development/release/business-verification"
+    },
+    {
+      "id": "access-verification",
+      "title": "Complete Tech Provider access verification (pages_* and instagram_* permissions)",
+      "detail": "Basics > Verifications > Access verification: a Business Admin categorizes how the business uses other businesses' data and describes the service it provides. Endpoints for pages_manage_posts, pages_read_engagement, pages_show_list, instagram_basic, instagram_content_publish, instagram_manage_insights, business_management and others return errors for businesses not verified as Tech Providers, regardless of App Review status. Decision in approximately 5 days.",
+      "who": "human",
+      "portalUrl": "https://developers.facebook.com/apps/",
+      "tips": ["This is independent of App Review and access levels: you need both."],
+      "source": "https://developers.facebook.com/docs/development/release/access-verification/"
+    },
+    {
+      "id": "prepare-submission",
+      "title": "Prepare the App Review submission: screencasts, per-permission notes, reviewer access",
+      "detail": "For each permission write a distinct, non-copy-pasted description (how it helps users, why it is needed, how data is used, why the app is worse without it). Record a 1080p+ silent screencast at <=1440px width showing a user granting each permission and the app using it, with English UI or captions and an enlarged cursor. Provide step-by-step instructions and a way for reviewers to test with their own accounts (never your personal credentials).",
+      "who": "assisted",
+      "tips": ["Reviewers reject the whole submission if they cannot access the app, and reject each permission they cannot see in use.", "Private apps that reviewers cannot test can only get instagram_basic and instagram_manage_comments approved."],
+      "source": "https://developers.facebook.com/docs/resp-plat-initiatives/individual-processes/app-review/submission-guide"
+    },
+    {
+      "id": "submit-review",
+      "title": "Request Advanced Access and submit App Review",
+      "detail": "App Review > Permissions and Features: click 'Request advanced access' on each permission (unlocked only after a logged successful call), attach the notes and screencasts, answer the data handling questions (evaluated automatically in ~30 seconds), and submit. Meta's guide says to expect a decision within a week; the dashboard says most within 10 days.",
+      "who": "assisted",
+      "portalUrl": "https://developers.facebook.com/apps/",
+      "tips": ["Do not change settings while review is pending.", "Submit only permissions with implemented, demonstrable features; unused permissions are rejected and drag down the whole submission."],
+      "source": "https://developers.facebook.com/docs/resp-plat-initiatives/individual-processes/app-review/submission-guide"
+    },
+    {
+      "id": "go-live",
+      "title": "Switch the app to Live mode",
+      "detail": "After approval, toggle App Mode to Live in the dashboard toolbar. In Live mode only approved (Advanced Access) permissions can be requested from non-role users; Standard Access permissions keep working for role users. Data created in Development mode becomes visible to everyone once Live.",
+      "who": "agent",
+      "portalUrl": "https://developers.facebook.com/apps/",
+      "tips": ["Data Use Checkup must be completed before switching to Live if prompted."],
+      "source": "https://developers.facebook.com/docs/development/build-and-test/app-modes"
+    },
+    {
+      "id": "data-use-checkup",
+      "title": "Complete the annual Data Use Checkup",
+      "detail": "Once the app is live with Advanced Access, an app admin must certify yearly that each permission's data use complies with Platform Terms and Developer Policies, including the data handling questions added in 2024. Apps with only Standard Access or in Development mode are exempt until they go Live.",
+      "who": "assisted",
+      "portalUrl": "https://developers.facebook.com/apps/",
+      "source": "https://developers.facebook.com/docs/development/maintaining-data-access/data-use-checkup"
+    }
+  ],
+  "scopes": {
+    "note": "Meta calls them permissions. Every Business/Consumer app gets Standard Access automatically, which only works for people with a role on the app. Advanced Access (needed for anyone else) is granted per permission via App Review and requires Business Verification; the pages_* and instagram_* permissions below additionally require Tech Provider access verification. Permissions have dependencies (e.g. pages_manage_posts needs pages_read_engagement + pages_show_list) that must be requested together.",
+    "examples": [
+      { "scope": "pages_show_list", "purpose": "List the Pages a user manages; dependency for almost everything", "triggersReview": true },
+      { "scope": "pages_read_engagement", "purpose": "Read Page posts, photos, videos, followers and insights", "triggersReview": true },
+      { "scope": "pages_manage_posts", "purpose": "Create, edit and delete Page posts on behalf of the user", "triggersReview": true },
+      { "scope": "pages_manage_metadata", "purpose": "Subscribe to Page webhooks and update Page settings", "triggersReview": true },
+      { "scope": "instagram_basic", "purpose": "Read a linked Instagram professional account's profile and media", "triggersReview": true },
+      { "scope": "instagram_content_publish", "purpose": "Publish feed photos/videos/reels to an Instagram professional account", "triggersReview": true },
+      { "scope": "instagram_manage_insights", "purpose": "Read Instagram account and media insights", "triggersReview": true },
+      { "scope": "public_profile", "purpose": "Basic profile of the logging-in user; Advanced Access granted automatically to Consumer apps and legacy Business apps", "triggersReview": false }
+    ]
+  },
+  "approval": {
+    "required": "conditional",
+    "triggers": [
+      "Any user without an app role (Administrator/Developer/Tester) or business role needs to grant a permission -> that permission needs Advanced Access via App Review.",
+      "Requesting Advanced Access on any permission -> Business Verification of the linked Business Portfolio (policy since Feb 1, 2023).",
+      "Calling endpoints behind pages_manage_posts, pages_read_engagement, pages_show_list, instagram_basic, instagram_content_publish, instagram_manage_insights, business_management etc. for other businesses -> Tech Provider access verification.",
+      "Switching to Live mode -> Terms of Service URL, icon, category, display name, contact email, app purpose, and Data Use Checkup if prompted.",
+      "Keeping Advanced Access -> annual Data Use Checkup."
+    ],
+    "process": "1) Build the integration and make real API calls with every permission using role users in Development mode. 2) Link the app to a Business Portfolio and have a Business Admin complete Business Verification (documents) and, for Pages/Instagram permissions, Tech Provider access verification (use-case questionnaire). 3) In App Review > Permissions and Features click Request advanced access per permission, attach per-permission notes, screen recordings and reviewer test instructions, answer data handling questions. 4) Meta tests the app with its own accounts; approved permissions move to Advanced Access, rejected ones come back with a reason and can be resubmitted. 5) Toggle to Live.",
+    "reviewTime": "Official: submission guide says a decision 'within a week'; the App Review dashboard states most requests are reviewed within 10 days; access verification 'approximately 5 days'. Community-observed (2026, developer forum and vendor blog): 13-20 days is common, with Meta reportedly warning of up to 20 days mid-2026; business verification turnaround is not published and anecdotally ranges from 1 day to 2+ weeks, longer if documents mismatch.",
+    "reviewerAsksFor": [
+      "Separate, non-templated use-case description for each permission (how it helps users, why needed, how data is used)",
+      "Silent 1080p screen recording per permission showing a user granting it and the app using it (English UI or captions, cursor enlarged)",
+      "Step-by-step instructions and a publicly reachable or credentialed test path reviewers can use with their own Meta accounts",
+      "Privacy Policy URL, Terms of Service URL, data deletion instructions, compliant 1024x1024 app icon and accurate category",
+      "Verified Business Portfolio (legal documents matching business name/address) and, for Pages/Instagram permissions, completed Tech Provider access verification",
+      "Evidence of a successful API call with each requested permission within the last 30 days",
+      "Answers to the data handling questions (data use, sharing, security)"
+    ],
+    "commonRejections": [
+      "Reviewers could not access or log in to the app (2FA blocks, dead staging server, geo restrictions, empty test workspace) -> entire submission rejected",
+      "A requested permission has no screen recording or the recording does not show the permission actually being used",
+      "Permission requested that the app does not use or that has no logged API call in the last 30 days",
+      "Copy-pasted or generic descriptions ('to improve user experience') across permissions",
+      "Use case does not match Meta's allowed usage for the permission (e.g. pages_manage_posts for scheduling on Pages the user does not own)",
+      "Personal account credentials included in the submission",
+      "Business Verification incomplete or documents whose legal name/address differ from the Business Portfolio",
+      "Settings changed after submission, triggering re-review or cancellation"
+    ],
+    "source": "https://developers.facebook.com/docs/resp-plat-initiatives/individual-processes/app-review/submission-guide"
+  },
+  "nuances": [
+    {
+      "title": "Development mode is fully functional for role users",
+      "detail": "In Development mode every permission at Standard or Advanced Access can be granted by Administrators, Developers and Testers, and all features are active, so an agent can post to your own Pages and Instagram accounts with zero review. Data created in dev mode is hidden from non-role users until the app goes Live.",
+      "source": "https://developers.facebook.com/docs/development/build-and-test/app-modes"
+    },
+    {
+      "title": "Role and test-user ceilings",
+      "detail": "Up to 500 Administrators; up to 50 Testers on an app not linked to a verified business, 500 combined Testers + Analytics Users when linked to a business-verified Business Manager; up to 10 synthetic test users per app. Testers must accept the invite under Facebook Settings > Apps and Websites > Requests.",
+      "source": "https://developers.facebook.com/docs/development/build-and-test/app-roles"
+    },
+    {
+      "title": "Advanced Access button is gated on recent API usage",
+      "detail": "'Request advanced access' stays greyed out until Meta logs a successful call with that permission within the past 30 days; logging can lag, so make the calls a couple of days before you intend to submit.",
+      "source": "https://developers.facebook.com/docs/resp-plat-initiatives/individual-processes/app-review/submission-guide"
+    },
+    {
+      "title": "Three separate verifications, not one",
+      "detail": "App Review (per permission), Business Verification (per business), and Tech Provider access verification (per business, for most pages_*/instagram_* permissions) are independent; passing App Review alone still yields API errors on Tech Provider gated endpoints until access verification is approved.",
+      "source": "https://developers.facebook.com/docs/development/release/access-verification/"
+    },
+    {
+      "title": "Redirect URIs: HTTPS + Strict Mode exact match, state is the only free parameter",
+      "detail": "Enforce HTTPS is on by default since 2018 and Strict Mode is required for all apps: the full redirect URI including path and query must be listed verbatim; only the state parameter value is ignored. Put per-user data in state rather than in the URI.",
+      "source": "https://developers.facebook.com/docs/facebook-login/security"
+    },
+    {
+      "title": "Token lifetimes: hours -> 60 days -> non-expiring Page tokens",
+      "detail": "Short-lived user tokens last hours; exchange server-side for a ~60-day long-lived user token; Page access tokens obtained from a long-lived user token have no fixed expiry (they die on password change, role removal, or app deauthorization). Instagram Login tokens: 1 hour short-lived, 60 days long-lived, refreshable before expiry.",
+      "source": "https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived"
+    },
+    {
+      "title": "Two Instagram API flavours with different scope names",
+      "detail": "'Instagram API with Facebook Login' requires the professional account linked to a Facebook Page and uses instagram_basic / instagram_content_publish plus pages_show_list and pages_read_engagement. 'Instagram API with Instagram Login' needs no Page and uses instagram_business_basic / instagram_business_content_publish. Both need App Review for Advanced Access and Tech Provider verification.",
+      "source": "https://developers.facebook.com/docs/instagram-platform/overview"
+    },
+    {
+      "title": "No fees, but an annual compliance chore",
+      "detail": "Meta charges nothing for App Review or Business Verification, but live apps with Advanced Access must complete the Data Use Checkup every year (with data handling questions since Jan 2024) or risk losing permissions.",
+      "source": "https://developers.facebook.com/docs/development/maintaining-data-access/data-use-checkup"
+    }
+  ],
+  "blockers": [
+    {
+      "blocker": "Business Verification needs legal documents and a Business Admin; an unincorporated solo developer or a mismatch between document name and Business Manager name stalls everything.",
+      "workaround": "Set up the Business Portfolio with the exact legal entity name/address from the registration document before uploading; if no legal entity exists yet, stay in Development mode and onboard early customers as Testers (up to 50) or run through Composio managed auth, which uses Composio's already-verified app."
+    },
+    {
+      "blocker": "App Review requires a reviewer-testable product with screencasts; an agent-only backend with no UI has nothing to record.",
+      "workaround": "Build a minimal hosted web UI that performs the login and shows each permission's effect (list Pages, publish a post, read insights), record that, and provide a reviewer login path without 2FA and with pre-populated test data."
+    },
+    {
+      "blocker": "The 'Request advanced access' button is disabled until a successful API call per permission is logged within 30 days.",
+      "workaround": "Have the agent exercise every permission against your own Page/Instagram account from the app in Development mode a few days before submission, and verify the calls appear in the App Dashboard insights."
+    },
+    {
+      "blocker": "Tech Provider access verification gates pages_*/instagram_* endpoints even after App Review approval.",
+      "workaround": "Start access verification (Basics > Verifications) in parallel with Business Verification; it needs only a questionnaire from a Business Admin and typically decides in about 5 days."
+    },
+    {
+      "blocker": "Review wait of 1-3 weeks (dashboard says 10 days; developers report longer in 2026) with silence from Meta, and resubmitting restarts the queue.",
+      "workaround": "Submit once with all dependencies and a clean recording; keep serving existing customers as Testers in the meantime; do not cancel or edit settings while 'Review in progress'."
+    },
+    {
+      "blocker": "Facebook account restrictions: the developer's personal account is the Administrator; if Meta flags it (automation, new account, unusual login) you lose dashboard access.",
+      "workaround": "Add at least two Administrators from long-standing accounts, link the app to a Business Portfolio so roles are managed there, and never automate logins on the admin account."
+    }
+  ],
+  "agentPlan": {
+    "agentDoes": [
+      "Create the app in the dashboard (given an authenticated session), choose Business/Facebook Login + Instagram products, set Valid OAuth Redirect URIs including Composio's callback, fill Basic Settings, and record App ID/Secret into the secrets store.",
+      "Generate Privacy Policy, Terms of Service and Data Deletion instruction pages and host them on the app domain.",
+      "Add teammates as Testers/Developers, create test users and app-scoped test Pages, and run the full OAuth + long-lived token + Page token exchange flow.",
+      "Exercise every permission with real API calls against role-owned Pages/Instagram accounts so the 30-day usage requirement is satisfied.",
+      "Draft per-permission App Review notes, reviewer step-by-step instructions, and a storyboard for each screencast; record the screencasts if it has browser control over the UI.",
+      "Prepare the Business Verification data (legal name, address, phone, domain) and the Tech Provider questionnaire answers for human submission.",
+      "Monitor review status and developer alerts, draft responses to reviewer feedback, and complete the Data Use Checkup answers for admin approval."
+    ],
+    "humanDoes": [
+      "Register as a Meta Developer with a genuine, aged Facebook account and log in to the dashboard (and keep that account safe from automation).",
+      "Own the Facebook Page and Instagram professional account that are used for testing and recording.",
+      "As Business Admin, upload legal business documents and confirm domain/phone/email for Business Verification; complete Tech Provider access verification attestations.",
+      "Review and accept the Meta Platform Terms, Developer Policies and the data handling attestations; click Submit on App Review and the annual Data Use Checkup.",
+      "Toggle the app to Live mode after approval."
+    ]
+  },
+  "evidence": {
+    "sources": [
+      { "url": "https://developers.facebook.com/docs/resp-plat-initiatives/individual-processes/app-review", "title": "Meta App Review overview (when review is required, roles exempt, how Meta tests)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/resp-plat-initiatives/individual-processes/app-review/submission-guide", "title": "App Review submission guide (descriptions, screencast specs, reviewer access, 'within a week', 30-day API call requirement, rejection reasons)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/graph-api/overview/access-levels", "title": "Access Levels: Standard vs Advanced Access, Business Verification required for Advanced", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/development/build-and-test/app-modes", "title": "App Modes: Development vs Live behaviour", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/development/build-and-test/test-users", "title": "Test Users (10 per app, limitations)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/development/build-and-test/app-roles", "title": "App Roles (Administrator/Developer/Tester/Analytics; 500 admins, 50 or 500 testers; invite acceptance)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/development/release/business-verification", "title": "Business Verification for developers (required for Advanced Access, only Business Admin can complete)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/blog/post/2023/02/01/developer-platform-requiring-business-verification-for-advanced-access/", "title": "Meta blog: Business Verification required for Advanced Access from Feb 1, 2023; Individual Verification no longer accepted", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/development/release/access-verification/", "title": "Access Verification (Tech Provider): gated permission list, ~5 day decision, independent of App Review", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/development/maintaining-data-access/data-use-checkup", "title": "Data Use Checkup (annual, live apps with Advanced Access, data handling questions since Jan 2024)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/permissions", "title": "Permissions reference (pages_*, instagram_* descriptions, dependencies, screencast required, Business Verification required for Advanced Access)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/facebook-login/security", "title": "Facebook Login security: Strict Mode redirect URIs, Enforce HTTPS, exact match, state parameter", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived", "title": "Long-lived tokens (60-day user tokens, non-expiring Page tokens, fb_exchange_token)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/instagram-platform/overview", "title": "Instagram Platform overview (Instagram Login vs Facebook Login variants, scopes, App Review + Business Verification, 1h/60d tokens)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/docs/development/create-an-app/app-dashboard/basic-settings", "title": "App Dashboard Basic Settings (fields required for Live mode, data deletion URL, verification section)", "confidence": "documented" },
+      { "url": "https://developers.facebook.com/community/threads/2119529588613973/", "title": "Developer community thread: App Review pending 13 days; dashboard says most reviewed within 10 days", "confidence": "inferred", "note": "Single developer report, no replies." },
+      { "url": "https://bundle.social/blog/meta-app-review-20-days", "title": "bundle.social: Meta App Review taking up to 20 days (2026 observations, rejection patterns)", "confidence": "inferred", "note": "Vendor blog promoting its own unified API; used for community-observed timelines and rejection patterns only." },
+      { "url": "https://docs.composio.dev/toolkits/managed-auth", "title": "Composio managed auth toolkit list (FACEBOOK and INSTAGRAM listed as Composio-managed OAuth available)", "confidence": "documented" },
+      { "url": "https://docs.composio.dev/docs/authentication/custom-app-vs-managed-app", "title": "Composio: managed vs custom auth configs", "confidence": "documented", "note": "Page says the dashboard shows the redirect URI; the literal https://backend.composio.dev/api/v3/toolkits/auth/callback value was supplied by the task brief, not read from this page." }
+    ],
+    "tested": [
+      "Opened the Access Levels page and confirmed: Standard Access permissions 'can only be requested from app users who have a role on the requesting app', Advanced Access 'can be requested from any app user', and 'Business Verification is required to get Advanced Access'.",
+      "Opened the App Modes page and confirmed Development-mode apps can only request permissions from role users and that new apps start in Development mode.",
+      "Opened the App Roles page and confirmed the 500-administrator cap, 50 testers for unlinked apps and 500 testers + analytics users for business-verified apps; opened Test Users and confirmed the 10-test-user limit.",
+      "Opened the App Review submission guide and confirmed the 'within a week' decision statement, the 30-day successful-API-call requirement for the Request advanced access button, the screencast specs (1080p, <=1440px width, no audio, English or captions) and the listed rejection reasons.",
+      "Opened the Access Verification page and confirmed the Tech Provider permission list (including pages_manage_posts, pages_show_list, pages_read_engagement, instagram_basic, instagram_content_publish) and the 'approximately 5 days' decision time.",
+      "Opened the Facebook Login security page and confirmed Strict Mode is required for all apps and exact URI matching except the state parameter.",
+      "Opened the Instagram Platform overview and confirmed the two login variants, their scope names, and 1-hour / 60-day token lifetimes.",
+      "Opened docs.composio.dev/toolkits/managed-auth and confirmed FACEBOOK and INSTAGRAM appear under 'Composio-managed OAuth available'."
+    ],
+    "unverified": [
+      "Business Verification document list and turnaround: the Meta Business Help Center pages (facebook.com/business/help/2058515294227817 and /1095661473946872) returned only a title to the fetcher, so accepted documents and timing are from general knowledge and vendor reports, not read here.",
+      "The App Review FAQ and Tech Provider verification doc URLs guessed from the docs tree returned 404; the 'most requests reviewed within 10 days' dashboard text is quoted from a developer's forum post, not seen in Meta documentation.",
+      "Community-observed review durations (13-20 days in 2026) come from one forum post and one vendor blog; Meta publishes no SLA beyond 'within a week'.",
+      "Consequences of missing the annual Data Use Checkup (permission removal) are not stated on the checkup page read here.",
+      "Whether Instagram API with Instagram Login (instagram_business_* scopes) is also subject to Tech Provider access verification was confirmed for instagram_business_basic and instagram_business_content_publish via the permission list, but not for every new scope.",
+      "Composio's exact bring-your-own redirect URI for Meta was not visible on the custom-app page (it says the dashboard displays it); the value in this guide is as supplied by the task brief."
+    ]
+  },
+  "meta": {
+    "generatedBy": "research-agent",
+    "generatedAt": "2026-10-23",
+    "version": 1
+  }
+}

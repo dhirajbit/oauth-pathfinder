@@ -1,0 +1,320 @@
+{
+  "slug": "salesforce",
+  "name": "Salesforce",
+  "website": "https://developer.salesforce.com",
+  "category": "CRM",
+  "summary": "Creating an OAuth client in Salesforce is a self-service Setup task with no Salesforce review: sign up for a free Developer Edition org, create an External Client App (new connected apps are blocked by default as of Spring '26), enable OAuth with your callback URL and the api / refresh_token scopes, and wait a few minutes for the consumer key to propagate. The friction is per-customer: the customer's org must be an edition with API access (Professional needs a paid add-on), an admin may need to pre-authorise your app, and the AppExchange security review (weeks, paid for commercial listings) is only needed if you want to list on AppExchange.",
+  "composio": {
+    "managedAuthAvailable": true,
+    "toolkitSlug": "SALESFORCE",
+    "note": "Composio lists SALESFORCE under Composio-managed OAuth, so you can connect customer orgs without creating your own External Client App. For a bring-your-own app, set the Callback URL to https://backend.composio.dev/api/v3/toolkits/auth/callback and give Composio the consumer key and secret."
+  },
+  "verdict": {
+    "difficulty": "moderate",
+    "difficultyReason": "The app itself is easy and free (Developer Edition, no review), but Salesforce has more environment-specific traps than most providers: the Spring '26 switch from Connected Apps to External Client Apps changes the Setup path and docs, new apps take minutes to propagate, sandbox and production use different login hosts and separate app configs, token endpoints move to the org's My Domain / instance_url, and whether a given customer can authorise at all depends on their edition's API access and the admin's Permitted Users / IP policies.",
+    "handsOnMinutes": { "min": 20, "max": 45 },
+    "approvalWait": {
+      "required": "conditional",
+      "minDays": 0,
+      "maxDays": 42,
+      "note": "No approval to build or to have customers authorise your app directly. Only an AppExchange listing requires the security review: Salesforce documents roughly 1-2 weeks intake verification plus 3-4 weeks of first-time Product Security testing (2-3 weeks for a retest), so 4-6 weeks per attempt, longer if you fail and resubmit. A fee applies for paid solutions (free solutions pay nothing); amount is not on the public docs page."
+    },
+    "timeToFirstToken": "30-60 minutes including the Developer Edition signup and the post-creation propagation wait"
+  },
+  "prerequisites": [
+    {
+      "text": "A Salesforce org where you can create apps: a free Developer Edition org (developer.salesforce.com/signup) is the standard choice and has API access on by default.",
+      "blocking": true,
+      "source": "https://developer.salesforce.com/docs/platform/api-rest/guide/intro-rest-compatible-editions.html"
+    },
+    {
+      "text": "Setup permissions in that org: Customize Application plus either Modify All Data or Manage Connected Apps (External Client Apps need the equivalent app-manager permissions); an admin profile in a Dev Edition org has these.",
+      "blocking": true,
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.connected_app_manage_oauth.htm&type=5"
+    },
+    {
+      "text": "An HTTPS callback URL for the web server flow (custom schemes are acceptable for mobile apps; http://localhost:PORT is accepted for local tools like Salesforce CLI).",
+      "blocking": true,
+      "source": "https://developer.salesforce.com/docs/platform/sfdx-dev/guide/sfdx-dev-auth-eca.html"
+    },
+    {
+      "text": "Every customer org you connect to must be Enterprise, Performance, Unlimited or Developer Edition, or Professional with the API add-on; otherwise API calls fail with API_DISABLED_FOR_ORG. The authorising user also needs the 'API Enabled' profile permission.",
+      "blocking": true,
+      "source": "https://developer.salesforce.com/docs/platform/api-rest/guide/intro-rest-compatible-editions.html"
+    },
+    {
+      "text": "For an AppExchange listing only: membership in the AppExchange Partner Program (ISV), a Managed-Released package, a Lightning Ready solution, a provider profile and connected packaging org in the Partner Console.",
+      "blocking": false,
+      "source": "https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/security_review_how_it_works.htm"
+    }
+  ],
+  "steps": [
+    {
+      "id": "dev-org",
+      "title": "Sign up for a free Developer Edition org",
+      "detail": "Go to developer.salesforce.com/signup and create a Developer Edition org; it is free, has API access enabled, and gives you an admin user. Use it for building and testing; do not develop directly in a customer's production org.",
+      "who": "assisted",
+      "portalUrl": "https://developer.salesforce.com/signup",
+      "tips": [
+        "Signup requires email verification and setting a password, so a human usually completes it.",
+        "Note the org's My Domain (https://<something>.develop.my.salesforce.com); you will use it as the login host."
+      ],
+      "source": "https://developer.salesforce.com/signup"
+    },
+    {
+      "id": "choose-app-type",
+      "title": "Choose External Client App (not a legacy Connected App)",
+      "detail": "As of Spring '26 creating new Connected Apps is restricted/disabled by default and Salesforce says to use External Client Apps instead; existing connected apps keep working and you must contact Salesforce Support to create a new one. External Client Apps split OAuth into a global settings file (holds the consumer secret, never packaged) and a local settings file, and have a distribution state of Local or Packageable.",
+      "who": "agent",
+      "tips": [
+        "Most third-party tutorials still say 'New Connected App'; translate them to the External Client App Manager screens.",
+        "Pick 'Packageable' only if you will distribute via a 2GP managed package; Local apps cannot be packaged later and are not copied into sandboxes on refresh."
+      ],
+      "source": "https://developer.salesforce.com/docs/platform/api-rest/guide/intro-oauth-and-connected-apps.html"
+    },
+    {
+      "id": "create-eca",
+      "title": "Create the External Client App and enable OAuth",
+      "detail": "Setup > Quick Find 'App Manager' > New External Client App. Fill in name and contact email, then under API (Enable OAuth Settings) click Enable OAuth, enter the Callback URL (for Composio: https://backend.composio.dev/api/v3/toolkits/auth/callback; you can list several, one per line), and select scopes such as 'Manage user data via APIs (api)', 'Perform requests at any time (refresh_token, offline_access)' and optionally 'Manage user data via Web browsers (web)'. Click Create.",
+      "who": "assisted",
+      "portalUrl": "https://login.salesforce.com/lightning/setup/NavigationMenus/home",
+      "tips": [
+        "The redirect_uri you send at runtime must exactly match one of the Callback URL entries or authorisation fails.",
+        "Leave 'Require secret for Web Server Flow' on for a confidential server-side client; turn it off only for public/native clients using PKCE.",
+        "Salesforce recommends web server flow + PKCE and blocking the user-agent and username-password flows."
+      ],
+      "source": "https://developer.salesforce.com/docs/platform/sfdx-dev/guide/sfdx-dev-auth-eca.html"
+    },
+    {
+      "id": "consumer-key",
+      "title": "Retrieve the consumer key and secret (after propagation)",
+      "detail": "Setup > App Manager > External Client App Manager > your app > Settings tab > OAuth Settings > Consumer Key and Secret. Salesforce emails a verification code you must enter before the key is shown. Salesforce's own docs say to wait a few minutes after creating the app before using it; third-party guides consistently report 2-10 minutes before the key works.",
+      "who": "assisted",
+      "portalUrl": "https://login.salesforce.com/lightning/setup/NavigationMenus/home",
+      "tips": [
+        "The email verification step means an agent cannot read the secret unaided unless it has access to the admin's inbox.",
+        "If the first token request returns invalid_client_id right after creation, wait and retry rather than recreating the app."
+      ],
+      "source": "https://developer.salesforce.com/docs/platform/mobile-sdk/guide/connected-apps-howto.html"
+    },
+    {
+      "id": "policies",
+      "title": "Set OAuth policies: Permitted Users, IP relaxation, refresh token policy",
+      "detail": "On the app's Policies tab (Manage for connected apps) choose Permitted Users = 'All users may self-authorize' (default, users approve on first login) or 'Admin approved users are pre-authorized' (only profiles/permission sets you assign can use it, no consent prompt). Choose IP Relaxation ('Enforce IP restrictions' is default; 'Relax IP restrictions' or 'relax for refresh tokens' avoids failures from server IPs outside the org's login ranges) and a Refresh Token Policy ('valid until revoked' is default; alternatives expire after N or if unused for N).",
+      "who": "agent",
+      "tips": [
+        "In customer orgs these policies are owned by the customer admin and are never packaged; expect each customer to set their own.",
+        "Switching from self-authorise to pre-authorised immediately cuts off every user not explicitly assigned.",
+        "Users with the 'Use Any API Client' permission bypass Permitted Users restrictions."
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.connected_app_manage_oauth.htm&type=5"
+    },
+    {
+      "id": "login-urls",
+      "title": "Pick the right login host for the environment",
+      "detail": "Authorise at https://<MyDomain>.my.salesforce.com/services/oauth2/authorize (preferred), or https://login.salesforce.com for production/Developer Edition and https://test.salesforce.com for sandboxes. After token exchange use the instance_url returned in the token response (or the My Domain host) for API calls, never a hard-coded login host.",
+      "who": "agent",
+      "tips": [
+        "Sandboxes are separate orgs: a Local External Client App in production is NOT copied to new sandboxes, so create/configure it there too (packaged apps are copied).",
+        "Let the user choose 'Production' vs 'Sandbox' (or enter their My Domain) in your connect UI; Composio exposes this as a subdomain/environment field."
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_web_server_flow.htm&type=5"
+    },
+    {
+      "id": "run-flow",
+      "title": "Run the web server (authorization code) flow and store instance_url",
+      "detail": "Redirect to /services/oauth2/authorize?response_type=code&client_id=<consumer key>&redirect_uri=<callback>&scope=api refresh_token&code_challenge=..., then POST the code (plus client_secret and code_verifier) to /services/oauth2/token. Persist access_token, refresh_token and instance_url; use refresh_token at the same token endpoint with grant_type=refresh_token when access expires (session timeout).",
+      "who": "agent",
+      "tips": [
+        "If you omit the scope parameter all scopes assigned to the app are requested; a requested scope must be a subset of the registered ones.",
+        "'full' does not return a refresh token; you must still request refresh_token explicitly."
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_tokens_scopes.htm&type=5"
+    },
+    {
+      "id": "customer-install",
+      "title": "Onboard each customer org (admin may need to pre-authorise)",
+      "detail": "Customers authorise your app by logging in through your OAuth flow; the app then appears under their Setup > Connected Apps OAuth Usage / External Client App Manager where the admin can block it, pre-authorise specific profiles, change IP relaxation or revoke tokens. If a customer admin has chosen 'Admin approved users are pre-authorized', users get an error until the admin assigns their profile or permission set.",
+      "who": "human",
+      "tips": [
+        "Send customers a short admin note: required edition/API access, the 'API Enabled' permission, and the policy settings you recommend (e.g. relax IP restrictions for refresh tokens if your servers are not in their login IP ranges)."
+      ],
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.connected_app_manage_oauth.htm&type=5"
+    },
+    {
+      "id": "security-review",
+      "title": "(Only for AppExchange listing) Pass the AppExchange security review",
+      "detail": "Join the AppExchange Partner Program, package the solution as a Managed-Released package, run Salesforce Code Analyzer and the Checkmarx scanner from the Partner Security Portal, run a DAST scan against any external web service, document false positives, then submit via the Security Review Wizard in the Partner Console with test credentials for every environment. Expect ~1-2 weeks intake plus ~3-4 weeks testing per attempt, and a fee for paid solutions.",
+      "who": "human",
+      "portalUrl": "https://partners.salesforce.com/",
+      "tips": [
+        "API-only solutions (no managed package) still need the review to list, but the required materials are lighter: Dev Edition org, false-positive doc and solution documentation.",
+        "Reviews are periodically re-run for listed packages; submit major/minor versions, not patches, to maximise inheritance."
+      ],
+      "source": "https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/security_review_how_it_works.htm"
+    }
+  ],
+  "scopes": {
+    "note": "Scopes are selected on the app in Setup and apply to every org that installs it; the runtime scope parameter can only narrow them. None trigger a Salesforce review for direct distribution; only AppExchange listing is reviewed, and reviewers look at what the app actually does rather than the scope list. Customer admins see the scopes on the approval screen and in Connected Apps OAuth Usage.",
+    "examples": [
+      { "scope": "api", "purpose": "Manage user data via APIs: REST, Bulk API 2.0 and all Connect REST resources for the logged-in user. The workhorse scope for CRM integrations.", "triggersReview": false },
+      { "scope": "refresh_token, offline_access", "purpose": "Perform requests at any time: returns a refresh token so the app can work while the user is offline (the two names are synonymous).", "triggersReview": false },
+      { "scope": "web", "purpose": "Manage user data via Web browsers: allows the access token to be used on the web and includes Visualforce access; required by some SDKs/CLIs.", "triggersReview": false },
+      { "scope": "full", "purpose": "Full access: everything the user can access, encompassing all other scopes. Does NOT return a refresh token by itself; many admins reject it as over-broad.", "triggersReview": false },
+      { "scope": "openid", "purpose": "Returns a signed OpenID Connect ID token in the web server flow.", "triggersReview": false },
+      { "scope": "id, profile, email, address, phone", "purpose": "Access the identity URL service for basic user info; every scope implicitly includes id.", "triggersReview": false },
+      { "scope": "chatter_api", "purpose": "Access some Connect REST API resources (Chatter); api covers all of them.", "triggersReview": false },
+      { "scope": "custom_permissions", "purpose": "Read the org's custom permissions and whether the user has them.", "triggersReview": false }
+    ]
+  },
+  "approval": {
+    "required": "conditional",
+    "triggers": [
+      "You want to list the solution on AppExchange (managed package, Salesforce Platform API-only solution, or Marketing Cloud Engagement API solution). This is the only Salesforce-run review.",
+      "Direct distribution (customers authorise your External Client App via OAuth without AppExchange) requires no Salesforce approval at all.",
+      "Needing a brand-new legacy Connected App after Spring '26 requires a Salesforce Support exception."
+    ],
+    "process": "AppExchange security review: enrol in the AppExchange Partner Program, connect your packaging org and create a provider profile in the Partner Console, certify Lightning Ready, scan with Salesforce Code Analyzer and the Checkmarx Source Code Scanner (Partner Security Portal) and run a DAST scan on any external web app/service, fix or document false positives, then submit through the Security Review Wizard. Stages: submit, intake verification, queue, Product Security testing, results. Pay the fee through the submission interface (free solutions are exempt). Failures come back with findings; you fix and resubmit for a shorter retest.",
+    "reviewTime": "Roughly 1-2 weeks intake verification plus 3-4 weeks first-time testing (2-3 weeks for retest of a failed submission), per Salesforce; total 4-6 weeks per attempt, more with resubmissions and queue volume.",
+    "reviewerAsksFor": [
+      "A Salesforce Developer Edition org with the Managed-Released package installed (unmanaged or beta packages are rejected)",
+      "URLs and login credentials for every external web app, service and mobile client the solution uses",
+      "Checkmarx / Code Analyzer report and DAST scan reports with false-positive documentation",
+      "Solution user documentation and your company's information security policies (scaled to company size)",
+      "For mobile: TestFlight/ad hoc iOS build or .apk; for Marketing Cloud apps: environment credentials"
+    ],
+    "commonRejections": [
+      "CRUD/FLS and sharing violations in Apex (exactly what Graph Engine flags)",
+      "Insecure handling of Salesforce credentials/tokens in the external service, or missing TLS",
+      "Injection/XSS findings in Visualforce, LWC or the external web app",
+      "Submission incomplete: omitted components, no test credentials, unmanaged package, undocumented false positives",
+      "Solution not Lightning Ready or not enrolled in the partner program"
+    ],
+    "source": "https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/security_review_how_it_works.htm"
+  },
+  "nuances": [
+    {
+      "title": "Connected Apps are legacy; External Client Apps are the path",
+      "detail": "Salesforce restricted creation of new connected apps in Spring '26 (existing ones keep working; Support can grant exceptions). External Client Apps use the same OAuth flows but a different Setup UI (External Client App Manager), separate global/local OAuth settings files, Settings vs Policies tabs, and only package via 2GP.",
+      "source": "https://developer.salesforce.com/docs/platform/api-rest/guide/intro-oauth-and-connected-apps.html"
+    },
+    {
+      "title": "Propagation delay after creating or editing an app",
+      "detail": "Salesforce documentation says to wait a few minutes after creating an app before using it; the community figure is 2-10 minutes. Symptoms are invalid_client_id or a failing Consumer Key and Secret button. Do not recreate the app; wait and retry.",
+      "source": "https://developer.salesforce.com/docs/platform/mobile-sdk/guide/connected-apps-howto.html"
+    },
+    {
+      "title": "Login host differs by environment and tokens are org-specific",
+      "detail": "Production and Developer Edition orgs use login.salesforce.com, sandboxes use test.salesforce.com, and Salesforce now recommends the org's My Domain URL for both. The token response includes instance_url, which is the host for API calls; store it per connection because it differs per customer.",
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_web_server_flow.htm&type=5"
+    },
+    {
+      "title": "Local apps are not copied into sandboxes",
+      "detail": "Only packaged External Client Apps are copied when a sandbox is created or refreshed, so a customer who wants to test in a sandbox needs the app recreated there (with a different consumer key) unless you distribute a package.",
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.external_client_apps.htm&type=5"
+    },
+    {
+      "title": "Refresh token lifetime is a per-org admin policy",
+      "detail": "Default is 'valid until revoked', but any customer admin can set 'immediately expire', 'expire if not used for N' or 'expire after N' (Salesforce CLI docs recommend 90 days). Design for re-authorisation and surface a clear 'reconnect Salesforce' path.",
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.connected_app_manage_oauth.htm&type=5"
+    },
+    {
+      "title": "IP restrictions can silently block server-side refreshes",
+      "detail": "With the default 'Enforce IP restrictions', token use from your servers can fail if the user's profile has login IP ranges. Admins must pick 'Relax IP restrictions' or 'Enforce IP restrictions, but relax for refresh tokens'; JWT bearer and SAML bearer flows always enforce IP ranges regardless.",
+      "source": "https://help.salesforce.com/s/articleView?id=xcloud.connected_app_manage_oauth.htm&type=5"
+    },
+    {
+      "title": "Edition and user permission gates",
+      "detail": "API access is on by default only in Enterprise, Performance, Unlimited and Developer editions; Professional needs a paid add-on; Starter/Group/Essentials have none. Even with API access the user needs the 'API Enabled' permission, or the org returns API_DISABLED_FOR_ORG / an insufficient-access error.",
+      "source": "https://developer.salesforce.com/docs/platform/api-rest/guide/intro-rest-compatible-editions.html"
+    },
+    {
+      "title": "Consumer secret retrieval requires email identity verification",
+      "detail": "Viewing the consumer key and secret triggers a 'Verify Your Identity' step with an emailed code, and rotation needs the 'Allow consumer key and secret rotation' permission. Budget for a human in the loop whenever secrets are read or rotated.",
+      "source": "https://developer.salesforce.com/docs/platform/sfdx-dev/guide/sfdx-dev-auth-eca.html"
+    }
+  ],
+  "blockers": [
+    {
+      "blocker": "Customer org is Professional, Starter or Essentials edition without API access; every call returns API_DISABLED_FOR_ORG.",
+      "workaround": "Ask the customer to buy the API add-on for Professional (via Your Account app or their AE) or upgrade; there is no technical bypass. Qualify prospects on edition before promising an integration."
+    },
+    {
+      "blocker": "Customer admin set Permitted Users to 'Admin approved users are pre-authorized' and your users are not assigned, so authorisation fails with an 'not approved' error.",
+      "workaround": "Have the admin add the users' profile or permission set to the app's App Policies (Connected App Access / Assigned Connected Apps), or switch the app to 'All users may self-authorize'."
+    },
+    {
+      "blocker": "Token requests fail immediately after creating the app (invalid_client_id) or the Consumer Key and Secret button errors.",
+      "workaround": "Wait 2-10 minutes for propagation and retry; verify you copied the full consumer key; do not delete and recreate the app."
+    },
+    {
+      "blocker": "You need a legacy Connected App (e.g. for Dev Hub scratch-org creation or a tool that only supports connected apps) but Spring '26 blocks creation.",
+      "workaround": "Use an External Client App wherever the tool supports it; otherwise open a Salesforce Support case for a temporary exception, or reuse an existing connected app in the org."
+    },
+    {
+      "blocker": "Refresh token stops working after days or weeks because the customer admin set an expiry/inactivity policy or revoked it in OAuth Usage.",
+      "workaround": "Detect invalid_grant on refresh, mark the connection as needing re-auth, and prompt the user to reconnect; ask the admin to relax the Refresh Token Policy for your app if continuous access is required."
+    },
+    {
+      "blocker": "Listing on AppExchange requires passing the security review, which takes 4-6 weeks per attempt and a fee for paid apps.",
+      "workaround": "Distribute directly via OAuth (no review needed) while you prepare the package; run Code Analyzer and Checkmarx early, fix CRUD/FLS findings, and submit only major/minor versions."
+    }
+  ],
+  "agentPlan": {
+    "agentDoes": [
+      "Produce the exact Setup click-path and field values for the External Client App (name, contact email, callback URLs including the Composio callback, scope selection, PKCE/secret settings) and the recommended Policies (Permitted Users, IP relaxation, refresh token policy).",
+      "If given an authenticated Salesforce CLI session, create the app via Metadata API (ExternalClientApplication + ExtlClntAppOauthSettings metadata) or at minimum generate the metadata XML for deployment.",
+      "Implement the web server flow with PKCE, token exchange, refresh handling with invalid_grant detection, and per-connection storage of instance_url; test against the Developer Edition org with a /services/data/vXX.0/sobjects call.",
+      "Build the environment selector (production vs sandbox vs custom My Domain) in the connect UI and handle test.salesforce.com vs login.salesforce.com.",
+      "Draft the customer admin onboarding note (edition/API requirement, API Enabled permission, recommended app policies).",
+      "If going to AppExchange: run Salesforce Code Analyzer, triage findings, draft false-positive documentation and the solution documentation package."
+    ],
+    "humanDoes": [
+      "Sign up for the Developer Edition org (email verification) and log in to Setup.",
+      "Click through the New External Client App form if the agent has no CLI/Metadata API access, and complete the emailed identity verification to reveal the consumer key and secret; paste them into the secret store.",
+      "Customer-side: a Salesforce admin with Customize Application and Manage Connected Apps / Modify All Data must authorise or pre-authorise the app, set IP relaxation and refresh token policy, and buy the API add-on if on Professional edition.",
+      "Open a Salesforce Support case if a legacy Connected App is unavoidable after Spring '26.",
+      "For AppExchange: join the partner program, create the provider profile, pay the security review fee, provide test environments and credentials, and respond to Product Security findings."
+    ]
+  },
+  "evidence": {
+    "sources": [
+      { "url": "https://developer.salesforce.com/docs/platform/api-rest/guide/intro-oauth-and-connected-apps.html", "title": "Authorization Through External Client Apps or Connected Apps and OAuth 2.0 (REST API Developer Guide)", "confidence": "documented", "note": "Official statement that creating connected apps is restricted as of Spring '26 and external client apps are recommended; contact Support otherwise." },
+      { "url": "https://help.salesforce.com/s/articleView?id=xcloud.external_client_apps.htm&type=5", "title": "External Client Apps (Salesforce Help)", "confidence": "documented", "note": "Global vs local OAuth settings files, distribution state, 2GP packaging, local apps not copied to sandboxes, admins manage policies / developers manage settings." },
+      { "url": "https://developer.salesforce.com/docs/platform/sfdx-dev/guide/sfdx-dev-auth-eca.html", "title": "Create an External Client App in Your Org (Salesforce DX Developer Guide)", "confidence": "documented", "note": "Step-by-step Setup path (App Manager > New External Client App), Enable OAuth, callback URL, scope names, Policies tab, refresh-token 90-day recommendation, consumer key retrieval with emailed verification code." },
+      { "url": "https://help.salesforce.com/s/articleView?id=xcloud.connected_app_create.htm&type=5", "title": "Create a Connected App (Salesforce Help)", "confidence": "documented", "note": "Spring '26 restriction note, editions where connected apps can be created, use cases." },
+      { "url": "https://help.salesforce.com/s/articleView?id=xcloud.connected_app_overview.htm&type=5", "title": "Connected Apps (Salesforce Help)", "confidence": "documented", "note": "Definition, Spring '26 restriction, Manage Access section." },
+      { "url": "https://help.salesforce.com/s/articleView?id=xcloud.connected_app_manage_oauth.htm&type=5", "title": "Manage OAuth Access Policies for a Connected App (Salesforce Help)", "confidence": "documented", "note": "Required permissions, Permitted Users options and warning, IP Relaxation options, Refresh Token Policy options, Use Any API Client caveat." },
+      { "url": "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_web_server_flow.htm&type=5", "title": "OAuth 2.0 Web Server Flow for Web App Integration (Salesforce Help)", "confidence": "documented", "note": "Authorize endpoint on My Domain, parameters, redirect_uri must match Callback URL, PKCE recommendation, scope subset rule." },
+      { "url": "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_tokens_scopes.htm&type=5", "title": "OAuth Tokens and Scopes (Salesforce Help)", "confidence": "documented", "note": "Full scope table incl. api, web, full (no refresh token), refresh_token/offline_access synonymy, refresh token lifetime admin-configured." },
+      { "url": "https://developer.salesforce.com/docs/platform/api-rest/guide/intro-rest-compatible-editions.html", "title": "Supported Editions and Required Permissions (REST API Developer Guide)", "confidence": "documented", "note": "API on by default in Enterprise/Performance/Unlimited/Developer; Professional add-on; API_DISABLED_FOR_ORG; API Enabled permission." },
+      { "url": "https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/security_review_how_it_works.htm", "title": "How the AppExchange Security Review Works (ISVforce Guide)", "confidence": "documented", "note": "Review required to distribute on AppExchange, five stages, readiness prerequisites, Code Analyzer / Checkmarx; timeline figures (1-2 weeks intake, 3-4 weeks testing, 2-3 weeks retest) seen via search snippet of this page." },
+      { "url": "https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/security_review_required_materials.htm", "title": "Required Materials for Security Review Submission (ISVforce Guide)", "confidence": "documented", "note": "Materials matrix by architecture: Dev Edition org, managed package, external credentials, Checkmarx, DAST, false positives, documentation; Managed-Released only." },
+      { "url": "https://developer.salesforce.com/docs/platform/mobile-sdk/guide/connected-apps-howto.html", "title": "Create a Connected App (Mobile SDK Development Guide)", "confidence": "documented", "note": "Official 'wait a few minutes for the token to propagate' note; scope labels; callback URL rules for mobile." },
+      { "url": "https://developer.salesforce.com/signup", "title": "Developer Edition signup", "confidence": "documented", "note": "Confirms free Developer Edition signup page exists; page does not list API limits." },
+      { "url": "https://getknit.dev/blog/salesforce-api-key", "title": "How to Get a Salesforce API Key (Connected App) - Knit", "confidence": "inferred", "note": "Third-party source for the 'up to 10 minutes' propagation figure." },
+      { "url": "https://developers.apideck.com/apis/crm/salesforce/configuration", "title": "Salesforce Configuration Guide - Apideck", "confidence": "inferred", "note": "Third-party confirmation of ~10 minute activation delay." },
+      { "url": "https://tekunda.com/blog/How-the-AppExchange-Security-Review-Submission-Loop-Works", "title": "How the AppExchange Security Review Submission Loop Works - Tekunda", "confidence": "inferred", "note": "Third-party claim of a USD 999 security review fee for paid solutions; not confirmed on Salesforce docs." },
+      { "url": "https://striim.com/docs/en/salesforce-connected-apps-and-external-client-apps.html", "title": "Salesforce connected apps and external client apps - Striim docs", "confidence": "inferred", "note": "Third-party note that the Spring '26 restriction applies to UI and API and that Support can grant temporary exceptions." },
+      { "url": "https://docs.composio.dev/toolkits/managed-auth", "title": "Composio managed auth toolkit list", "confidence": "documented", "note": "SALESFORCE listed under Composio-managed OAuth." }
+    ],
+    "tested": [
+      "Read the listed developer.salesforce.com and help.salesforce.com pages on 2026-10-23 via a rendering fetcher (help.salesforce.com is JS-rendered and returns a 'CSS Error' shell to plain fetchers).",
+      "Confirmed the Spring '26 connected-app restriction wording appears identically on four separate official pages.",
+      "Opened docs.composio.dev/toolkits/managed-auth and confirmed SALESFORCE appears in the managed-OAuth list.",
+      "Did not create an org or an External Client App or run a token exchange during this research."
+    ],
+    "unverified": [
+      "The exact '2-10 minute' propagation window: Salesforce only says 'wait a few minutes'; the numeric range is from third-party guides.",
+      "The AppExchange security review fee amount (third-party sources say USD 999 for paid solutions; the official fee page could not be fetched).",
+      "Whether External Client Apps can be created via Setup in Group/Essentials editions (the editions list was read for Connected Apps only).",
+      "The 'Create an External Client App' Salesforce Help page itself timed out; its steps were taken from the equivalent Salesforce DX guide page.",
+      "Salesforce's official 'New connected apps can no longer be created in Spring '26' release note was not opened directly; its content is reflected by the notes on the developer-guide pages."
+    ]
+  },
+  "meta": {
+    "generatedBy": "research-agent",
+    "generatedAt": "2026-10-23",
+    "version": 1
+  }
+}

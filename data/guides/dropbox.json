@@ -1,0 +1,288 @@
+{
+  "slug": "dropbox",
+  "name": "Dropbox",
+  "website": "https://www.dropbox.com/developers",
+  "category": "File storage",
+  "summary": "Dropbox app registration takes about 15 minutes in the App Console and works immediately for your own account, but new apps sit in Development status: once 50 users link, you get two weeks to obtain Production approval or linking freezes. The approval itself is a few business days and mostly checks branding (no 'Dropbox' in the name), least-privilege scopes and a privacy policy, while the App folder vs Full Dropbox access type you pick at creation can never be changed.",
+  "composio": {
+    "managedAuthAvailable": true,
+    "toolkitSlug": "DROPBOX",
+    "note": "Listed under 'Composio-managed OAuth available' on docs.composio.dev/toolkits/managed-auth. If you bring your own app, register https://backend.composio.dev/api/v3/toolkits/auth/callback under OAuth 2 > Redirect URIs."
+  },
+  "verdict": {
+    "difficulty": "moderate",
+    "difficultyReason": "Setup is standard OAuth 2 with PKCE and refresh tokens, no review is needed to start, and the console is simple. The friction is lifecycle: short-lived (about 4 hour) access tokens force refresh-token handling, the immutable access type, the 50-user/two-week Production deadline, and the branding rules that can force a rename before approval.",
+    "handsOnMinutes": { "min": 15, "max": 45 },
+    "approvalWait": {
+      "required": "conditional",
+      "minDays": 0,
+      "maxDays": 10,
+      "note": "No approval to build or to link up to 500 users in Development. Production approval is required to exceed 50 linked users long-term; Dropbox says it responds to nearly all requests within a few business days, but it will not review until 50 users are linked unless you request early review."
+    },
+    "timeToFirstToken": "Minutes (Generate access token button for your own account)"
+  },
+  "prerequisites": [
+    { "text": "A Dropbox account to own the app (a free Basic account works for user-scoped apps).", "blocking": true, "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide" },
+    { "text": "Decision on access type: App folder (sandboxed /Apps/<name> folder) or Full Dropbox. This cannot be changed after creation and team scopes need Full Dropbox.", "blocking": true, "source": "https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/How-to-change-application-access-type/td-p/152212" },
+    { "text": "An app name that does not contain 'Dropbox', any Dropbox product name, 'DBX', 'DB', 'DfB', or start with 'drop'; it cannot be renamed after Production approval.", "blocking": true, "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/branding-guide" },
+    { "text": "An HTTPS redirect URI (http is permitted only for localhost) registered exactly, including port and path.", "blocking": true, "source": "https://dropbox.tech/developers/oauth-code-flow-implementation-using-node-js-and-dropbox-javascript-sdk" },
+    { "text": "An app-specific privacy policy and an app icon for the Production application.", "blocking": false, "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide" },
+    { "text": "For Dropbox Business team endpoints: a Business team where a team admin can authorize, or a Business development account requested via the developer support form.", "blocking": false, "source": "https://www.dropbox.com/developers/support" }
+  ],
+  "steps": [
+    {
+      "id": "create-app",
+      "title": "Create a Scoped access app in the App Console",
+      "detail": "Go to dropbox.com/developers/apps > Create app. Choose 'Scoped access' (the only current API option; legacy app types are deprecated), then the access type, then a name. The app key (client ID) and app secret (client secret) appear on the Settings tab immediately.",
+      "who": "assisted",
+      "portalUrl": "https://www.dropbox.com/developers/apps",
+      "source": "https://composio.dev/auth/dropbox"
+    },
+    {
+      "id": "access-type",
+      "title": "Choose App folder vs Full Dropbox (irreversible)",
+      "detail": "App folder gives read/write only inside a dedicated folder under the user's /Apps directory; Full Dropbox reaches everything, including shared and team folders, and is required for Extensions and for team scopes. Dropbox staff confirm the access type cannot be changed later; you must create a new app and re-authorize every user.",
+      "who": "assisted",
+      "portalUrl": "https://www.dropbox.com/developers/apps",
+      "tips": ["In Development status you can delete the app and re-register under the same name with the other access type."],
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide"
+    },
+    {
+      "id": "name-check",
+      "title": "Name the app to pass the branding guide",
+      "detail": "The name must not include 'Dropbox' or any Dropbox product name, must not start with 'drop', and must not use lookalikes such as DBX, DB or DfB. Use 'for Dropbox' only to distinguish a Dropbox-specific edition of your own product. Core apps can be renamed in Development, but not after Production approval (rename then requires a support ticket).",
+      "who": "agent",
+      "portalUrl": "https://www.dropbox.com/developers/apps",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/branding-guide"
+    },
+    {
+      "id": "permissions",
+      "title": "Select scopes on the Permissions tab",
+      "detail": "Tick only the scopes you call (for example account_info.read, files.metadata.read, files.content.read, files.content.write, sharing.read). Team scopes (team_info.read, members.read, team_data.member, events.read) appear only on Full Dropbox apps. Dropbox reviews for unnecessarily broad permissions during Production review, and users see every requested scope on the consent screen. Click Submit to save.",
+      "who": "agent",
+      "portalUrl": "https://www.dropbox.com/developers/apps",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/oauth"
+    },
+    {
+      "id": "redirect-uris",
+      "title": "Register exact redirect URIs under OAuth 2",
+      "detail": "Add each callback under Settings > OAuth 2 > Redirect URIs. Dropbox matches the full URI at authorization time, including port and path; HTTPS is required except for localhost. For Composio bring-your-own-app, register https://backend.composio.dev/api/v3/toolkits/auth/callback. Disable the implicit grant toggle if you do not use it.",
+      "who": "agent",
+      "portalUrl": "https://www.dropbox.com/developers/apps",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/oauth"
+    },
+    {
+      "id": "implement-flow",
+      "title": "Implement authorization code flow with token_access_type=offline (and PKCE for public clients)",
+      "detail": "Send users to https://www.dropbox.com/oauth2/authorize?client_id=...&response_type=code&redirect_uri=...&token_access_type=offline&state=... and exchange the code at https://api.dropboxapi.com/oauth2/token. Add code_challenge/code_challenge_method=S256 for desktop, mobile, SPA or open-source clients that cannot keep a secret; the token request then sends code_verifier instead of the secret. Use the scope parameter to request a subset per authorization.",
+      "who": "agent",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/oauth"
+    },
+    {
+      "id": "refresh-tokens",
+      "title": "Handle short-lived access tokens with refresh tokens",
+      "detail": "Access tokens are short-lived (expires_in is returned; community and SDK examples show 14400 seconds, about 4 hours). With token_access_type=offline you also get a refresh_token that does not expire until revoked; call /oauth2/token with grant_type=refresh_token to mint new access tokens. Without offline access the user must re-consent every few hours, so background jobs always need offline.",
+      "who": "agent",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/oauth"
+    },
+    {
+      "id": "test-own-account",
+      "title": "Test with the Generate access token button, then with real OAuth",
+      "detail": "The Settings tab's Generate button issues a short-lived token for the owner's account only. Call /2/users/get_current_account with Authorization: Bearer to confirm scopes, then run the full OAuth flow for at least one second account via Enable additional users.",
+      "who": "assisted",
+      "portalUrl": "https://www.dropbox.com/developers/apps",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/oauth"
+    },
+    {
+      "id": "enable-users",
+      "title": "Enable additional users while in Development status",
+      "detail": "New apps can only link the owner. On the app info page click Enable additional users to allow up to 500 total linked accounts while in Development. This is enough for demos, staging, hackathons and internal tools; such apps can stay in Development permanently if they never pass 50 links.",
+      "who": "assisted",
+      "portalUrl": "https://www.dropbox.com/developers/apps",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide"
+    },
+    {
+      "id": "apply-production",
+      "title": "Apply for Production status before you hit 50 linked users",
+      "detail": "From the app info page click Apply for production. The form asks how the app uses the API (be detailed), requires an app icon, and expects a clear app-specific privacy policy. Dropbox will not review until the app has linked at least 50 users unless you justify an early review in the 'Request early review' field. Once 50 users link, you have two weeks to apply and be approved or new linking freezes.",
+      "who": "human",
+      "portalUrl": "https://www.dropbox.com/developers/apps",
+      "tips": ["Unlinking users does not unfreeze a frozen app; only Production approval does.", "Finalize the app name first: it cannot be changed after approval."],
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide"
+    },
+    {
+      "id": "team-apps",
+      "title": "Optional: add Dropbox Business team scopes",
+      "detail": "For team endpoints, select team scopes on a Full Dropbox app and have a team admin authorize it; the token belongs to the team, not the admin, and the response includes team_id. Use the Dropbox-API-Select-User header with a team_member_id to act on a member's behalf (user scopes requested during team authorization govern what you can do). Non-admin members cannot authorize Business API apps.",
+      "who": "assisted",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/oauth"
+    },
+    {
+      "id": "monitor",
+      "title": "Monitor linked-user count and the production deadline",
+      "detail": "The App Console Analytics tab shows linked users and activity. Alert at roughly 40 links so the Production application is submitted with slack inside the two-week window. Keep meeting Production requirements after approval; Dropbox can revoke status for branding or terms violations.",
+      "who": "agent",
+      "portalUrl": "https://www.dropbox.com/developers/apps",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide"
+    }
+  ],
+  "scopes": {
+    "note": "Dropbox uses dotted scope strings selected on the Permissions tab and optionally narrowed per authorization with the scope parameter. No individual scope triggers an extra review, but Production review checks that the requested set is the least privileged for the stated use case. Team scopes require Full Dropbox access type and a team-admin authorization.",
+    "examples": [
+      { "scope": "account_info.read", "purpose": "Read the linked account's profile (users/get_current_account); the baseline scope nearly every app needs.", "triggersReview": false },
+      { "scope": "files.metadata.read", "purpose": "List folders and read file metadata without downloading content.", "triggersReview": false },
+      { "scope": "files.content.read", "purpose": "Download file contents and get temporary links.", "triggersReview": false },
+      { "scope": "files.content.write", "purpose": "Upload, move, copy and delete files and folders.", "triggersReview": false },
+      { "scope": "sharing.read", "purpose": "Read shared links and shared-folder membership.", "triggersReview": false },
+      { "scope": "sharing.write", "purpose": "Create shared links and manage sharing; scrutinised for least privilege during Production review.", "triggersReview": false },
+      { "scope": "team_data.member", "purpose": "Act on behalf of team members' files via Dropbox-API-Select-User; team-admin consent and Full Dropbox required.", "triggersReview": false },
+      { "scope": "members.read / team_info.read", "purpose": "List team members and read team metadata on a Business team.", "triggersReview": false }
+    ]
+  },
+  "approval": {
+    "required": "conditional",
+    "triggers": [
+      "Linking more than 50 Dropbox users: after the 50th link you have two weeks to obtain Production status before new links are frozen.",
+      "Needing more than the 500-user hard cap of Development status.",
+      "Wanting the app to be unaffected by future Development-status restrictions (Chooser/Saver/Embedder components never need approval)."
+    ],
+    "process": "Open the app's info page in the App Console and click Apply for production. Describe in detail how the app uses the Dropbox API, upload an app icon, confirm compliance with the branding guidelines and terms, and link an app-specific privacy policy. Dropbox does not start review until the app has at least 50 linked users unless you fill in the Request early review field with justification. Decisions arrive by email; rejected apps can fix issues and reapply. After approval the name is locked and the app must keep meeting Production requirements.",
+    "reviewTime": "Official: 'we respond to nearly all production requests within a few business days' (developer support FAQ). Community-observed: Dropbox staff on the forum repeat the few-business-days estimate, with holiday delays; no recent reports of multi-week waits, but the 50-user gate means the clock may not even start until you have users.",
+    "reviewerAsksFor": [
+      "A written description of how the app uses the API and what it does for users",
+      "An app icon that does not resemble Dropbox imagery",
+      "An app name free of 'Dropbox', product names, 'drop' prefixes, DBX/DB/DfB",
+      "An app-specific privacy policy describing handling of user data",
+      "A least-privilege scope set matching the stated use case",
+      "Evidence of real usage (50 linked users) or a justification for early review"
+    ],
+    "commonRejections": [
+      "App name or logo violates the branding guide (contains 'Dropbox', a product name, lookalikes, or Dropbox-style imagery)",
+      "Marketing or UI implies partnership with or endorsement by Dropbox",
+      "Requesting unnecessarily broad scopes or Full Dropbox when App folder suffices",
+      "Missing or generic privacy policy",
+      "App facilitates copyright infringement, distributes content without rights, or is a publicly searchable file-sharing service",
+      "Wrapping the DBX Platform for other developers without requiring them to get their own app keys"
+    ],
+    "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide"
+  },
+  "nuances": [
+    {
+      "title": "Access type is permanent",
+      "detail": "App folder vs Full Dropbox is chosen at creation and cannot be changed; Dropbox staff direct developers to create a new app. Existing tokens keep the old access level, so users must re-authorize against the new app key.",
+      "source": "https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/How-to-change-application-access-type/td-p/152212"
+    },
+    {
+      "title": "Access tokens live about 4 hours; refresh tokens are the real credential",
+      "detail": "Short-lived tokens (prefixed 'sl.') return expires_in, observed as 14400 seconds. Long-lived tokens are deprecated for new apps. Only token_access_type=offline yields a refresh_token, which persists until the user revokes the app. A 401 expired_access_token means refresh, not re-consent.",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/oauth"
+    },
+    {
+      "title": "50 users starts a two-week countdown; 500 is the hard cap",
+      "detail": "Development apps link only the owner until you click Enable additional users, then up to 500 accounts. After the 50th link you have two weeks to apply for and receive Production approval or new linking freezes; unlinking users does not unfreeze it.",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide"
+    },
+    {
+      "title": "Redirect URIs must match exactly; HTTPS except localhost",
+      "detail": "Register the full URI including scheme, port and path. Dropbox's own tutorial notes localhost is the only permitted http URI. Omitting redirect_uri entirely switches to a copy-paste code flow shown on dropbox.com, useful for CLIs.",
+      "source": "https://dropbox.tech/developers/oauth-code-flow-implementation-using-node-js-and-dropbox-javascript-sdk"
+    },
+    {
+      "title": "Name is locked after Production approval",
+      "detail": "Core apps can be renamed in Development, but once in Production only Dropbox support can rename them. Check the branding guide before applying: no 'Dropbox', product names, 'drop' prefixes or DBX/DB/DfB.",
+      "source": "https://www.dropbox.com/developers/support"
+    },
+    {
+      "title": "Team scopes need Full Dropbox and a team admin",
+      "detail": "The Permissions tab hides team scopes on App folder apps. Business API apps can only be authorized by a team admin, the resulting token is team-level, and member actions require the Dropbox-API-Select-User header. Dropbox warns these tokens grant extensive access and must be secured server-side.",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/oauth"
+    },
+    {
+      "title": "One app key per product, never per end user",
+      "detail": "Dropbox requires registering your app once and sharing the key across platforms; do not ask end users to create their own apps, and developer tools that wrap the API must make downstream developers obtain their own keys.",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide"
+    },
+    {
+      "title": "Chooser, Saver and Embedder skip OAuth and approval entirely",
+      "detail": "If you only need user-selected files, the pre-built components use the user's dropbox.com session, need no permissions and never require Production approval.",
+      "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide"
+    }
+  ],
+  "blockers": [
+    {
+      "blocker": "Created an App folder app and later need shared/team folders or team scopes.",
+      "workaround": "Create a new Full Dropbox app (same name is reusable if the old one is deleted in Development), migrate by prompting users to re-authorize, and run both keys in parallel during migration."
+    },
+    {
+      "blocker": "App hit 50 linked users and the two-week window lapsed; new users cannot link.",
+      "workaround": "Apply for Production immediately with a detailed description, icon and privacy policy; approval is the only way to unfreeze. Meanwhile point new users at the Chooser/Saver components if feasible."
+    },
+    {
+      "blocker": "Production review rejected for branding: name contains 'Dropbox' or logo resembles Dropbox imagery.",
+      "workaround": "Rename while still in Development (free), swap the icon for your own brand mark, remove partnership language from marketing, then reapply."
+    },
+    {
+      "blocker": "Integrations break every ~4 hours with 401 expired_access_token.",
+      "workaround": "Re-run authorization with token_access_type=offline, persist the refresh_token, and let the SDK (or a token-refresh middleware) exchange it before each session."
+    },
+    {
+      "blocker": "Need to test team endpoints but have no Dropbox Business team.",
+      "workaround": "Request a Dropbox Business development account via the form on the developer support page, or ask a team admin at a pilot customer to authorize the app."
+    },
+    {
+      "blocker": "Public client (SPA/CLI/desktop) cannot store the app secret.",
+      "workaround": "Use the authorization code flow with PKCE (S256); send code_verifier instead of the secret at the token endpoint, and add refresh tokens only if background access is required."
+    }
+  ],
+  "agentPlan": {
+    "agentDoes": [
+      "Pick the access type and least-privilege scope list from the endpoints the product actually calls, and draft a branding-compliant app name.",
+      "Prepare the exact redirect URI list (including the Composio callback) and PKCE/offline-access authorization URLs.",
+      "Implement code exchange, refresh-token rotation, 401 handling and the Dropbox-API-Select-User path for team apps.",
+      "Write the Production application narrative (how the API is used) and the app-specific privacy policy draft.",
+      "Set up linked-user monitoring with an alert well before 50 links."
+    ],
+    "humanDoes": [
+      "Log in to the App Console, click Create app, choose Scoped access and the access type, and copy the app secret into the secret manager.",
+      "Tick the Permissions and add Redirect URIs (agent can draft, human clicks Submit).",
+      "Run the OAuth consent as the owner and as an additional test user.",
+      "Click Apply for production, upload the icon, attest to branding/terms compliance and answer Dropbox's review email.",
+      "For Business apps, a team admin at the customer authorizes the app."
+    ]
+  },
+  "evidence": {
+    "sources": [
+      { "url": "https://docs.dropboxapi.com/dropbox-api/docs/oauth", "title": "Dropbox OAuth Guide (redirect target of dropbox.com/developers/reference/oauth-guide)", "confidence": "documented", "note": "Code flow, PKCE, token_access_type=offline, refresh tokens, scopes, team scopes, Select-User header, legacy long-lived tokens." },
+      { "url": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide", "title": "DBX Platform developer guide (redirect target of dropbox.com/developers/reference/developer-guide)", "confidence": "documented", "note": "App Console, access types, Development vs Production, 50-user/two-week rule, 500 cap, Request early review, privacy policy, prohibited apps." },
+      { "url": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/branding-guide", "title": "Dropbox developer branding guide", "confidence": "documented", "note": "No 'Dropbox' in name, no drop prefix, no DBX/DB/DfB, logo rules, partnership language." },
+      { "url": "https://www.dropbox.com/developers/support", "title": "Dropbox developer support FAQ", "confidence": "documented", "note": "Few business days review response; rename rules; Business development account form." },
+      { "url": "https://www.dropbox.com/developers/reference/devguide", "title": "DBX Platform developer guide (legacy URL)", "confidence": "documented", "note": "Same content as the docs.dropboxapi.com guide; used for the 500-user and early-review quotes." },
+      { "url": "https://www.dropbox.com/developers/business/docs", "title": "Dropbox Business API docs", "confidence": "documented", "note": "Fetch returned only navigation; team_data.member and admin-only authorization taken from search snippets of this page." },
+      { "url": "https://dropbox.tech/developers/oauth-code-flow-implementation-using-node-js-and-dropbox-javascript-sdk", "title": "Dropbox tech blog: OAuth code flow with Node.js", "confidence": "inferred", "note": "States localhost is the only permitted http redirect URI." },
+      { "url": "https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/How-to-change-application-access-type/td-p/152212", "title": "Dropbox Community: How to change application access type", "confidence": "inferred", "note": "Staff confirm access type cannot be changed; create a new app." },
+      { "url": "https://community.dropbox.com/en/discussion/comment/598132", "title": "Dropbox Community: short-lived token lifetime", "confidence": "inferred", "note": "Short-lived tokens valid several hours; 14400s observed in SDK examples." },
+      { "url": "https://django-storages.readthedocs.io/en/1.14.5/backends/dropbox.html", "title": "django-storages Dropbox backend", "confidence": "inferred", "note": "Shows a token response with expires_in 14400 and sl. prefix." },
+      { "url": "https://community.dropbox.com/en/discussion/781526/team-info-read", "title": "Dropbox Community: team scopes hidden on App folder apps", "confidence": "inferred", "note": "Team scopes require Full Dropbox access type." },
+      { "url": "https://docs.composio.dev/toolkits/managed-auth", "title": "Composio managed auth toolkits", "confidence": "documented", "note": "DROPBOX listed as Composio-managed OAuth." },
+      { "url": "https://composio.dev/auth/dropbox", "title": "Composio: create Dropbox OAuth2 credentials", "confidence": "inferred", "note": "App Console click path and Composio callback URI." }
+    ],
+    "tested": [
+      "Opened the official OAuth guide, developer guide, branding guide and developer support FAQ (following 301 redirects from dropbox.com/developers/reference/* to docs.dropboxapi.com) and confirmed the quoted rules.",
+      "Confirmed on docs.composio.dev/toolkits/managed-auth that DROPBOX appears under Composio-managed OAuth.",
+      "Confirmed the official OAuth guide does not state a numeric access-token lifetime; the 4-hour figure is from SDK examples and community posts."
+    ],
+    "unverified": [
+      "Exact access-token lifetime of 4 hours (14400s) is from third-party and community sources; official docs only say 'short-lived' and to rely on expires_in.",
+      "HTTPS-only redirect rule with localhost exception comes from a Dropbox tech blog and third-party library docs, not the current OAuth guide.",
+      "Access-type immutability is from Dropbox Community staff replies, not the developer guide.",
+      "Current App Console labels (e.g. whether 'Scoped access' is still the only option) were not verified by logging in.",
+      "Recent (2024-2026) community-reported Production review turnaround; only older staff estimates of a few business days were found.",
+      "Did not perform a live OAuth flow or submit a Production application."
+    ]
+  },
+  "meta": {
+    "generatedBy": "research-agent",
+    "generatedAt": "2026-10-23",
+    "version": 1
+  }
+}

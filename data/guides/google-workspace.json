@@ -1,0 +1,321 @@
+{
+  "slug": "google-workspace",
+  "name": "Google Workspace APIs (Gmail + Google Calendar)",
+  "website": "https://developers.google.com",
+  "category": "Productivity",
+  "summary": "Creating a Google OAuth client takes about 20 minutes and works immediately for up to 100 hand-listed test users, but every Gmail read/modify scope is RESTRICTED, which means a multi-week Trust & Safety review plus a paid, annually renewed CASA security assessment before the public can use it. Calendar-only or gmail.send-only apps get off much lighter (sensitive-scope review, no CASA).",
+  "composio": {
+    "managedAuthAvailable": true,
+    "toolkitSlug": "GMAIL",
+    "note": "Both GMAIL and GOOGLECALENDAR are listed under 'Composio-managed OAuth available' on docs.composio.dev/toolkits/managed-auth, so you can skip registering your own app for prototyping. For production (your own app name on the consent screen, dedicated quota, custom scopes) create a custom auth config and register Composio's callback https://backend.composio.dev/api/v3/toolkits/auth/callback as an authorized redirect URI in your own Google OAuth client."
+  },
+  "verdict": {
+    "difficulty": "very-hard",
+    "difficultyReason": "Registration itself is easy, but Gmail's gmail.readonly / gmail.modify / gmail.compose scopes are classified RESTRICTED. Shipping them to the public requires brand verification (domain ownership in Search Console, public homepage, same-domain privacy policy), a demo video, per-scope justifications, a restricted-scope review Google itself estimates at ~6 weeks, and a third-party CASA security assessment ($500-$4,500, renewed every 12 months). Calendar scopes are only 'sensitive' (3-10 business day review, no CASA).",
+    "handsOnMinutes": { "min": 20, "max": 90 },
+    "approvalWait": {
+      "required": "conditional",
+      "minDays": 0,
+      "maxDays": 60,
+      "note": "None while the app stays in Testing (max 100 test users, 7-day refresh tokens) or is Internal to one Workspace org. Sensitive scopes (Calendar, gmail.send): Google says 3-5 business days on the process page and 10 business days in the FAQ. Restricted scopes (Gmail read/modify): Google's FAQ says ~6 weeks, and the CASA assessment adds 2-3 weeks (tier 2) on top; community reports range 4-12 weeks end to end."
+    },
+    "timeToFirstToken": "~20 min for yourself and up to 100 test users (Testing mode, tokens die after 7 days); 1-2 weeks for public users with Calendar/sensitive scopes; 6-12 weeks for public users with Gmail restricted scopes (review + CASA)."
+  },
+  "prerequisites": [
+    { "text": "A Google account and a Google Cloud project (billing is NOT required for Gmail/Calendar APIs).", "blocking": true, "source": "https://developers.google.com/identity/protocols/oauth2" },
+    { "text": "A publicly accessible homepage on a domain you control, plus a privacy policy hosted on that same domain, before you can leave Testing with any sensitive/restricted scope.", "blocking": true, "source": "https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification" },
+    { "text": "Ownership of that domain verified in Google Search Console by a Google account that is also a member of the Cloud project.", "blocking": true, "source": "https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification" },
+    { "text": "An HTTPS redirect URI (localhost is the only HTTP exception). No wildcards, fragments, raw IPs or URL shorteners.", "blocking": true, "source": "https://developers.google.com/identity/protocols/oauth2/web-server" },
+    { "text": "For restricted Gmail scopes in production: budget for a CASA assessment by an authorized assessor (Google cites $500-$4,500 USD) and an unlisted YouTube demo video.", "blocking": false, "source": "https://developers.google.com/health/app-verification" },
+    { "text": "A Google Workspace / Cloud Identity organization if you want the 'Internal' user type, which skips verification and the 100-user cap entirely.", "blocking": false, "source": "https://support.google.com/cloud/answer/13464323" }
+  ],
+  "steps": [
+    {
+      "id": "create-project",
+      "title": "Create a Google Cloud project",
+      "detail": "In the Cloud Console create a new project (or reuse one). No billing account is needed for Gmail or Calendar API usage. Keep one project per product: the 100-user Testing cap and verification status are per project.",
+      "who": "assisted",
+      "portalUrl": "https://console.cloud.google.com/projectcreate",
+      "tips": ["Use a project name that matches your product; it is shown nowhere on the consent screen but helps when Trust & Safety emails you."],
+      "source": "https://developers.google.com/identity/protocols/oauth2"
+    },
+    {
+      "id": "enable-apis",
+      "title": "Enable the Gmail API and Google Calendar API",
+      "detail": "Open APIs & Services > Library and enable 'Gmail API' and 'Google Calendar API' for the project. Calls to an API that is not enabled fail with 403 accessNotConfigured even with a valid token.",
+      "who": "agent",
+      "portalUrl": "https://console.cloud.google.com/apis/library",
+      "source": "https://developers.google.com/workspace/gmail/api/auth/scopes"
+    },
+    {
+      "id": "consent-screen",
+      "title": "Configure the OAuth consent screen (Google Auth Platform > Branding + Audience)",
+      "detail": "Choose User Type: Internal (only your Workspace org, no verification ever) or External (anyone, starts in Testing). Fill in app name, user support email, homepage, privacy policy URL, authorized domains and developer contact email. External apps start with publishing status 'Testing'.",
+      "who": "assisted",
+      "portalUrl": "https://console.cloud.google.com/auth/overview",
+      "tips": ["The app name you enter here must match the name shown in your demo video later, or the video gets rejected.", "Authorized domains must be the top private domain (example.com, not app.example.com) and must include the domains of your redirect URIs."],
+      "source": "https://support.google.com/cloud/answer/15549945"
+    },
+    {
+      "id": "add-scopes",
+      "title": "Declare the scopes your app will request",
+      "detail": "On the Data Access page add only the scopes your implemented features need. The console labels each scope non-sensitive / sensitive / restricted. For Gmail prefer gmail.send (sensitive) or gmail.labels (non-sensitive) over gmail.readonly / gmail.modify (restricted) whenever that is enough; Google's reviewers explicitly downscope you otherwise.",
+      "who": "agent",
+      "portalUrl": "https://console.cloud.google.com/auth/scopes",
+      "tips": ["The scopes on the consent screen must exactly match what your code requests AND what you later submit for verification; mismatches are a top rejection reason."],
+      "source": "https://support.google.com/cloud/answer/13807380"
+    },
+    {
+      "id": "test-users",
+      "title": "Add test users (Testing mode)",
+      "detail": "On the Audience page add up to 100 Google accounts as test users. Only these accounts can authorize an External app in Testing; they see an 'unverified app' warning and their refresh tokens expire after 7 days (unless you only request openid/email/profile).",
+      "who": "agent",
+      "portalUrl": "https://console.cloud.google.com/auth/audience",
+      "tips": ["The 100 test-user quota is consumed as you add users; it is a hard cap on the project."],
+      "source": "https://support.google.com/cloud/answer/15549945"
+    },
+    {
+      "id": "create-client",
+      "title": "Create an OAuth 2.0 Client ID and register redirect URIs",
+      "detail": "APIs & Services > Credentials > Create credentials > OAuth client ID > Web application. Add Authorized redirect URIs exactly (scheme, case, trailing slash all matter). If using Composio with your own app, register https://backend.composio.dev/api/v3/toolkits/auth/callback. Download the client ID and secret.",
+      "who": "assisted",
+      "portalUrl": "https://console.cloud.google.com/apis/credentials",
+      "tips": ["Redirect URIs must be HTTPS except http://localhost; wildcards, fragments and raw IPs are rejected at save time.", "Request access_type=offline and prompt=consent to get a refresh token; it is only returned on the first authorization otherwise."],
+      "source": "https://developers.google.com/identity/protocols/oauth2/web-server"
+    },
+    {
+      "id": "domain-verification",
+      "title": "Verify domain ownership in Google Search Console",
+      "detail": "Add your top private domain as a Domain property in Search Console and verify it (DNS TXT record is the usual method). The verifying Google account must have owner permission on the domain property AND be a member of the Cloud project, otherwise brand verification cannot see it.",
+      "who": "human",
+      "portalUrl": "https://search.google.com/search-console",
+      "tips": ["An agent can generate the DNS TXT value, but someone with DNS registrar access has to add the record."],
+      "source": "https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification"
+    },
+    {
+      "id": "publish-homepage-privacy",
+      "title": "Publish a compliant homepage and privacy policy",
+      "detail": "Homepage must be publicly reachable (not behind login) and obviously about this app; Play Store / Facebook pages are not accepted. The privacy policy must live on the same domain as the homepage and describe how you access, use, store and share Google user data; for restricted scopes it must also meet the Limited Use requirements (no using Gmail data to train AI/ML models).",
+      "who": "assisted",
+      "tips": ["An agent can draft both pages; a human should review the privacy policy wording since it becomes a legal commitment under the Google API Services User Data Policy."],
+      "source": "https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification"
+    },
+    {
+      "id": "brand-verification",
+      "title": "Run brand verification and publish the app",
+      "detail": "On the Branding page click Verify Branding; the automated check usually finishes in minutes, manual review 2-3 business days. Then on the Audience page click 'Publish app' to move from Testing to In production. Branding edits are locked while verification runs, and a compliant result is only valid for 7 days.",
+      "who": "assisted",
+      "portalUrl": "https://console.cloud.google.com/auth/branding",
+      "source": "https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification"
+    },
+    {
+      "id": "demo-video",
+      "title": "Record the demo video and write scope justifications",
+      "detail": "Record an unlisted YouTube video, in English, showing the full OAuth grant flow with your app name on the consent screen, your client ID visible in the browser address bar, every requested scope on the consent screen, and the feature each scope powers. Write a per-scope justification explaining why a narrower scope is insufficient, and provide up to three documentation links.",
+      "who": "assisted",
+      "tips": ["Narrate or caption which scope each feature uses; 'does not sufficiently demonstrate functionality' is one of Google's four listed demo-video rejection reasons."],
+      "source": "https://support.google.com/cloud/answer/13804565"
+    },
+    {
+      "id": "submit-verification",
+      "title": "Submit for sensitive/restricted scope verification in the Verification Center",
+      "detail": "With branding published, open the Verification Center, confirm all scopes are declared and classified, answer the application-type questions, attach the video and justifications, and submit. Google's Trust & Safety team replies by email from api-oauth-support@google.com; reply to the latest thread and never resubmit more than once per 24 hours or the project gets a cooldown block.",
+      "who": "assisted",
+      "portalUrl": "https://console.cloud.google.com/auth/verification",
+      "tips": ["Do not change the consent screen or switch to Testing/Internal while the review is pending; that auto-cancels the request.", "A request with no response for 90 days is closed and shown as Rejected."],
+      "source": "https://support.google.com/cloud/answer/16868008"
+    },
+    {
+      "id": "casa",
+      "title": "Complete the CASA security assessment (restricted Gmail scopes only)",
+      "detail": "After the scope review passes, Trust & Safety tells you to pick an authorized CASA assessor from appdefensealliance.dev/casa/casa-assessors. The assessor validates your app against the OWASP ASVS-based CASA checklist (AL1 or AL2 assurance level assigned by Google based on user count and data handling), issues a Letter of Validation, and you upload it to Google. Google cites fees of $500-$4,500 USD paid to the assessor and 2-3 weeks for tier-2 apps; it must be repeated every 12 months.",
+      "who": "human",
+      "portalUrl": "https://appdefensealliance.dev/casa",
+      "tips": ["Existing SOC 2 / ISO 27001 / HITRUST reports can go through the CASA 'Accelerator' to skip redundant checks, but you still need an authorized assessor.", "Only required if you store or transmit restricted-scope data through your own servers; a pure client-side app may be exempt."],
+      "source": "https://support.google.com/cloud/answer/13465431"
+    }
+  ],
+  "scopes": {
+    "note": "Google classifies every scope as non-sensitive, sensitive or restricted on the consent-screen Data Access page. Sensitive scopes need a Trust & Safety review (3-10 business days). Restricted scopes need the same review PLUS a paid CASA security assessment renewed annually. Every Gmail scope that can read or write message content is restricted; gmail.send is only sensitive and gmail.labels is non-sensitive. Calendar scopes are labelled sensitive in the console (verified by Google's 'public application ... must complete a verification process' note, exact per-scope label confirmed only in the console UI).",
+    "examples": [
+      { "scope": "https://www.googleapis.com/auth/gmail.readonly", "purpose": "Read all messages, threads, labels and settings (RESTRICTED)", "triggersReview": true },
+      { "scope": "https://www.googleapis.com/auth/gmail.modify", "purpose": "Read, compose, send and permanently-delete-excluded changes to mail (RESTRICTED)", "triggersReview": true },
+      { "scope": "https://www.googleapis.com/auth/gmail.compose", "purpose": "Create drafts and send mail; cannot read inbox (RESTRICTED)", "triggersReview": true },
+      { "scope": "https://mail.google.com/", "purpose": "Full mailbox access incl. permanent delete; required for IMAP/SMTP (RESTRICTED, reviewers push back hard)", "triggersReview": true },
+      { "scope": "https://www.googleapis.com/auth/gmail.send", "purpose": "Send mail only, no read access (SENSITIVE: review but no CASA)", "triggersReview": true },
+      { "scope": "https://www.googleapis.com/auth/gmail.labels", "purpose": "Manage labels only (NON-SENSITIVE: no review)", "triggersReview": false },
+      { "scope": "https://www.googleapis.com/auth/calendar.events", "purpose": "View and edit events on all calendars (SENSITIVE)", "triggersReview": true },
+      { "scope": "https://www.googleapis.com/auth/calendar.readonly", "purpose": "Read calendars and events (SENSITIVE)", "triggersReview": true },
+      { "scope": "https://www.googleapis.com/auth/calendar.freebusy", "purpose": "Free/busy availability only; narrowest scheduling scope (SENSITIVE but easiest to justify)", "triggersReview": true }
+    ]
+  },
+  "approval": {
+    "required": "conditional",
+    "triggers": [
+      "Any External app in 'In production' status that requests a sensitive or restricted scope (unverified apps are capped at 100 lifetime users and show an 'unverified app' warning).",
+      "Wanting your app name and logo on the consent screen at all (brand verification, even with only non-sensitive scopes).",
+      "Any Gmail scope other than gmail.send / gmail.labels / add-on scopes -> restricted-scope verification + CASA.",
+      "Annual re-verification for restricted scopes (CASA Letter of Validation expires after 12 months).",
+      "Adding a new sensitive/restricted scope or changing branding on an already-verified app (re-verification)."
+    ],
+    "process": "1) Pass brand verification (automated minutes, manual 2-3 business days) and publish to production. 2) In the Verification Center declare all scopes, answer application-type questions, upload an unlisted YouTube demo video and per-scope justifications, submit. 3) Google Trust & Safety reviews and emails questions/downscope requests from api-oauth-support@google.com; reply in-thread. 4) For restricted scopes, after the scope review passes you are told to engage an authorized CASA assessor, obtain a Letter of Validation, and submit it. 5) Approved scopes are listed as verified; reassess annually.",
+    "reviewTime": "Official: brand verification 2-3 business days; sensitive scopes '3-5 business days' (process page) or '10 business days' (FAQ); restricted scopes '6 weeks' (FAQ) plus CASA '2-3 weeks for tier-2, 4-6 weeks for tier-3' (Google Health app-verification page). Community/vendor reports (Nylas, Unipile) describe the restricted path as 'several weeks or longer' and 2-8 weeks end to end; some developers report 2-3 months when CASA findings need remediation. Requests with no reply for 90 days are auto-closed.",
+    "reviewerAsksFor": [
+      "Unlisted YouTube demo video in English showing the consent screen with app name, client ID in the address bar, all scopes, and each scope's feature in use",
+      "Written justification per scope and why a narrower scope is insufficient (expect 'Confirm Downscoping' requests)",
+      "Publicly accessible homepage clearly relevant to the app",
+      "Privacy policy on the same domain disclosing Google-data access, use, storage and sharing (Limited Use compliant for restricted scopes)",
+      "Domain ownership verified in Search Console for every authorized domain",
+      "Up to three documentation links and the app's permitted application type",
+      "For restricted scopes: a CASA Letter of Validation from an authorized assessor"
+    ],
+    "commonRejections": [
+      "Requesting restricted Gmail scopes (gmail.readonly/modify/compose) when gmail.send or gmail.labels would cover the feature; or https://mail.google.com/ for anything other than permanent deletion / IMAP",
+      "Scopes requested for features that are not yet implemented or not shown in the video",
+      "Consent-screen scopes differ from the scopes in the verification submission",
+      "Demo video inaccessible, shows a different app/branding, skips the consent screen, or does not demonstrate each scope's functionality",
+      "Homepage behind a login, unrelated to the app, or a Play Store/Facebook listing; privacy policy on a different domain or silent about Google user data",
+      "Domain not verified by an account that is both Search Console owner and project member",
+      "Branding or scope changes made while the review is pending (auto-cancels the request); resubmitting more than once in 24 h (cooldown block)",
+      "Using Google user data to train AI/ML models, which violates Limited Use"
+    ],
+    "source": "https://support.google.com/cloud/answer/13463817"
+  },
+  "nuances": [
+    {
+      "title": "Testing-mode refresh tokens die after 7 days",
+      "detail": "An External app in Testing is issued refresh tokens that expire 7 days after consent (only openid/email/profile-only requests are exempt). Any agent integration that stores Gmail/Calendar tokens will silently break weekly until the app is published to production.",
+      "source": "https://developers.google.com/identity/protocols/oauth2"
+    },
+    {
+      "title": "The 100-user cap is lifetime, not concurrent",
+      "detail": "An unverified production app requesting sensitive/restricted scopes may onboard 100 new users total over the life of the project; the counter cannot be reset. Testing mode separately allows at most 100 named test users. Burning the cap with internal testing can block real customers later.",
+      "source": "https://support.google.com/cloud/answer/15549945"
+    },
+    {
+      "title": "Internal user type bypasses everything",
+      "detail": "If your users are all inside one Google Workspace / Cloud Identity org, set User Type = Internal: no verification, no unverified-app warning, no user cap. Workspace admins can also allowlist an unverified third-party app in the Admin console.",
+      "source": "https://support.google.com/cloud/answer/13464323"
+    },
+    {
+      "title": "Redirect URI rules are strict and validated at save time",
+      "detail": "HTTPS only (except localhost), exact string match including trailing slash and case, no wildcards, fragments, userinfo, raw IPs, path traversal or URL-shortener domains. The redirect URI host domains must also appear in the consent screen's authorized domains.",
+      "source": "https://developers.google.com/identity/protocols/oauth2/web-server"
+    },
+    {
+      "title": "Refresh token only on first consent; 100-token limit per user per client",
+      "detail": "Google returns a refresh_token only the first time a user authorizes unless you pass prompt=consent. Each Google account can hold 100 live refresh tokens per client ID; the oldest is revoked when a new one is minted. Tokens unused for 6 months expire.",
+      "source": "https://developers.google.com/identity/protocols/oauth2"
+    },
+    {
+      "title": "Brand-verification results expire in 7 days and lock branding edits",
+      "detail": "A compliant brand verification is valid for 7 days; if you edit app name, logo or URLs after that you must re-verify, and no branding edits are allowed while a verification is in progress.",
+      "source": "https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification"
+    },
+    {
+      "title": "CASA is a yearly cost, not a one-off",
+      "detail": "Restricted-scope apps must be revalidated by an authorized assessor at least every 12 months after the Letter of Validation date. Google quotes assessor fees of $500-$4,500 per assessment; vendors report higher figures for complex apps or full lab audits. Google has no control over the assessor's process or pricing.",
+      "source": "https://developers.google.com/health/app-verification"
+    },
+    {
+      "title": "Every OAuth client in the project is in scope for review",
+      "detail": "Verification is per project; Google reviews every OAuth client in it and recommends deleting clients that are not production-ready before submitting. Keep experiments in a separate project.",
+      "source": "https://support.google.com/cloud/answer/13463817"
+    }
+  ],
+  "blockers": [
+    {
+      "blocker": "Gmail read/modify scopes are restricted: public launch requires a 6-week-class review plus a paid CASA assessment renewed annually.",
+      "workaround": "Design around narrower scopes first: gmail.send (sensitive) for outbound agents, gmail.labels (non-sensitive) for triage, calendar.events/freebusy for scheduling. If reading mail is essential, keep the app in Testing (100 users, 7-day tokens) or Internal (one Workspace org) while the review runs, or use a pre-verified shared app via Composio managed auth / Nylas-style providers for the first customers."
+    },
+    {
+      "blocker": "Domain ownership must be proven in Search Console by an account that is also a project member; an agent cannot add DNS records to a registrar it does not control.",
+      "workaround": "Agent generates the TXT record value and the exact instructions; a human with registrar access adds it, then the agent re-runs the Search Console verification check."
+    },
+    {
+      "blocker": "Testing-mode refresh tokens expire after 7 days, so any stored-token agent workflow breaks weekly before the app is published.",
+      "workaround": "Either publish to production immediately (non-sensitive or already-approved scopes avoid the cap), use Internal user type for a Workspace org, or build re-consent prompts into the agent and expect weekly re-auth during development."
+    },
+    {
+      "blocker": "The CASA assessment requires a contract and payment with a third-party assessor plus evidence collection (ASVS controls, pen-test style scans) that only the company can authorize.",
+      "workaround": "Agent prepares the ASVS evidence package (architecture diagram, data-flow, dependency scan results, encryption-at-rest details) and shortlist of assessors; a human signs the engagement and pays. Reuse SOC 2 / ISO 27001 artifacts via the CASA Accelerator to shrink scope."
+    },
+    {
+      "blocker": "Demo video and homepage/privacy policy must exist before submission; a half-built product cannot be verified ('scopes only for implemented features').",
+      "workaround": "Ship the narrowest working feature per scope, record the video of exactly that, and add scopes incrementally in later re-verifications rather than requesting everything up front."
+    },
+    {
+      "blocker": "Auto-cancellations: any consent-screen edit, switching to Testing, or resubmitting too often cancels or cooldown-blocks the review.",
+      "workaround": "Freeze consent-screen configuration once submitted; use a separate Cloud project for experiments; reply only via the api-oauth-support@google.com email thread and wait at least 24 hours between submissions."
+    }
+  ],
+  "agentPlan": {
+    "agentDoes": [
+      "Create the Cloud project, enable Gmail and Calendar APIs, and create the OAuth web client with the correct redirect URIs (including Composio's callback) once logged in to the console session.",
+      "Fill in the consent screen branding, authorized domains, and declare the minimum scope set; add test users; keep the project in Testing for immediate use by named accounts.",
+      "Draft the homepage copy, the privacy policy (Limited Use compliant), per-scope justifications, and a storyboard/script for the demo video.",
+      "Generate the Search Console DNS TXT value and the exact verification steps for the human.",
+      "Run the OAuth flow end to end for a test user, confirm tokens work, and detect the 7-day expiry / re-consent needs.",
+      "Prepare the CASA evidence package (ASVS checklist mapping, data flow diagram, dependency scan) and a shortlist of authorized assessors with request-for-quote emails.",
+      "Monitor the Verification Center and api-oauth-support@google.com thread, draft replies and downscoping confirmations for human approval."
+    ],
+    "humanDoes": [
+      "Sign in to Google Cloud / own the Google account that becomes the project owner and Search Console domain owner.",
+      "Add the DNS TXT record at the registrar to prove domain ownership.",
+      "Review and legally own the privacy policy and the Google API Services User Data Policy / Limited Use commitments.",
+      "Record (or appear in) the demo video, upload it unlisted to a YouTube account they control.",
+      "Click 'Publish app' and 'Submit for verification' and attest to the application-type questions.",
+      "Choose, contract and pay the CASA assessor; approve remediation of any findings; repeat annually."
+    ]
+  },
+  "evidence": {
+    "sources": [
+      { "url": "https://support.google.com/cloud/answer/15549945", "title": "Google Auth Platform - Manage App Audience (user type, Testing vs In production, 100 test users, 7-day expiry, lifetime 100-user cap)", "confidence": "documented" },
+      { "url": "https://support.google.com/cloud/answer/13463817", "title": "OAuth App Verification FAQ (brand 2-3 days, sensitive 10 business days, restricted 6 weeks, lifetime user cap, Limited Use / no AI training)", "confidence": "documented" },
+      { "url": "https://support.google.com/cloud/answer/13463073", "title": "OAuth App Verification Help Center hub (sensitive/restricted must verify, annual re-verification)", "confidence": "documented" },
+      { "url": "https://support.google.com/cloud/answer/13464323", "title": "When is OAuth verification not needed (personal <100 users, testing, internal, service account, admin-trusted)", "confidence": "documented" },
+      { "url": "https://support.google.com/cloud/answer/13465431", "title": "Security Assessment (CASA assurance levels AL1/AL2, Letter of Validation, revalidate every year, Accelerator)", "confidence": "documented" },
+      { "url": "https://support.google.com/cloud/answer/13804565", "title": "Demo Video quick reference (requirements and 4 rejection reasons)", "confidence": "documented" },
+      { "url": "https://support.google.com/cloud/answer/13807380", "title": "Requesting Minimum Scopes quick reference (Gmail downscoping guidance, common rejections)", "confidence": "documented" },
+      { "url": "https://support.google.com/cloud/answer/16868008", "title": "Brand Approvals & Auto-Cancellations (90-day timeout, config-change cancellation, 24-hour resubmit cooldown)", "confidence": "documented" },
+      { "url": "https://support.google.com/cloud/topic/13841839", "title": "OAuth Quick Reference Guides topic index", "confidence": "documented" },
+      { "url": "https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification", "title": "Restricted scope verification steps, demo video, CASA via Google-approved assessors, 12-month reassessment", "confidence": "documented" },
+      { "url": "https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification", "title": "Sensitive scope verification (3-5 business days, justifications, demo video)", "confidence": "documented" },
+      { "url": "https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification", "title": "Brand verification (homepage, same-domain privacy policy, Search Console ownership, 7-day validity, 2-3 business days manual)", "confidence": "documented" },
+      { "url": "https://developers.google.com/identity/protocols/oauth2", "title": "Using OAuth 2.0 - refresh token expiration (7 days in Testing, 6 months unused, 100 tokens per account per client)", "confidence": "documented" },
+      { "url": "https://developers.google.com/identity/protocols/oauth2/web-server", "title": "OAuth 2.0 for Web Server apps - redirect URI validation rules, access_type=offline, prompt=consent", "confidence": "documented" },
+      { "url": "https://developers.google.com/workspace/gmail/api/auth/scopes", "title": "Gmail API scopes table with Non-sensitive / Sensitive / Restricted classification", "confidence": "documented" },
+      { "url": "https://developers.google.com/workspace/calendar/api/auth", "title": "Google Calendar API scopes list", "confidence": "documented", "note": "Page lists scopes and says public apps must verify, but does not print per-scope sensitivity labels." },
+      { "url": "https://developers.google.com/identity/protocols/oauth2/scopes", "title": "OAuth 2.0 Scopes for Google APIs (Gmail + Calendar scope strings)", "confidence": "documented" },
+      { "url": "https://developers.google.com/health/app-verification", "title": "Google Health app verification page (CASA fees $500-$4,500, 2-3 weeks tier-2, 4-6 weeks tier-3, annual)", "confidence": "documented", "note": "Official Google page, but written for Health APIs; the CASA figures are the same framework used for Gmail restricted scopes." },
+      { "url": "https://appdefensealliance.dev/casa", "title": "App Defense Alliance CASA overview (OWASP ASVS based, authorized assessors)", "confidence": "documented" },
+      { "url": "https://developer.nylas.com/docs/dev-guide/provider-guides/google/google-verification-security-assessment-guide", "title": "Nylas Google verification and security assessment guide", "confidence": "inferred", "note": "Vendor guide; used only for the 'several weeks or longer' and 12-month LOA renewal corroboration." },
+      { "url": "https://www.unipile.com/integrating-google-oauth-2-0-user-authentication-into-your-app/", "title": "Unipile: Google OAuth verification & Gmail API credentials", "confidence": "inferred", "note": "Vendor blog seen via search snippet only; source of the 2-8 week community range and higher CASA cost claims." },
+      { "url": "https://docs.composio.dev/toolkits/managed-auth", "title": "Composio managed auth toolkit list (GMAIL and GOOGLECALENDAR listed as Composio-managed OAuth available)", "confidence": "documented" },
+      { "url": "https://docs.composio.dev/docs/authentication/custom-app-vs-managed-app", "title": "Composio: managed vs custom auth configs", "confidence": "documented", "note": "Page says the dashboard shows the redirect URI; the literal https://backend.composio.dev/api/v3/toolkits/auth/callback value was supplied by the task brief, not read from this page." }
+    ],
+    "tested": [
+      "Opened the Manage App Audience page and confirmed the text that Testing status is limited to 100 test users, that authorizations/refresh tokens expire seven days after consent, and that the unverified-app 100-user cap 'applies over the entire lifetime of the project, and it cannot be reset or changed'.",
+      "Opened the Gmail API scopes page and confirmed gmail.readonly, gmail.modify, gmail.compose, gmail.insert, gmail.metadata, gmail.settings.* and mail.google.com are listed as Restricted; gmail.send as Sensitive; gmail.labels as Non-sensitive.",
+      "Opened the OAuth verification FAQ and confirmed the stated estimates: brand 2-3 business days, sensitive 10 business days, restricted 6 weeks; and the sensitive-scope process page separately says 3-5 business days.",
+      "Opened the OAuth 2.0 overview and confirmed the 7-day refresh-token expiry for Testing projects, the 6-month inactivity expiry, and the 100-refresh-tokens-per-account-per-client limit.",
+      "Opened the web-server OAuth page and confirmed redirect URI rules (HTTPS except localhost, exact match, no wildcards/fragments/raw IPs).",
+      "Opened the Security Assessment page and confirmed annual revalidation, AL1/AL2 assurance levels, and Letter of Validation terminology; opened the Google Health verification page and confirmed the $500-$4,500 fee range and 2-3 / 4-6 week tier durations.",
+      "Opened the Demo Video, Minimum Scopes and Auto-Cancellations quick references and confirmed the listed rejection reasons, the 90-day timeout and the 24-hour resubmission cooldown.",
+      "Opened docs.composio.dev/toolkits/managed-auth and confirmed GMAIL and GOOGLECALENDAR appear under 'Composio-managed OAuth available'."
+    ],
+    "unverified": [
+      "Per-scope sensitivity labels for Calendar scopes (calendar, calendar.events, calendar.readonly, calendar.freebusy) are only shown inside the Cloud Console UI; the public Calendar auth page does not print them. Treated as sensitive based on the console behaviour commonly reported, not from a page read here.",
+      "Real-world end-to-end restricted-scope timelines (2-8 weeks, up to 2-3 months with CASA remediation) come from vendor blogs and search snippets, not official docs.",
+      "CASA cost above Google's $500-$4,500 range (vendor claims of $15k+ for full lab audits) could not be confirmed; the authorized assessor list page (appdefensealliance.dev/casa/casa-assessors) was not opened.",
+      "Whether Google's 'tier-2 / tier-3' wording on the Health page maps exactly to the 'AL1 / AL2' assurance levels on the Cloud Security Assessment page; Google uses both vocabularies.",
+      "Composio's exact redirect URI for bring-your-own Google apps was not visible on the custom-app page (it says the dashboard displays it); the value in this guide is as supplied by the task brief.",
+      "Whether the Google Workspace Marketplace 'admin install' path lets unverified Gmail apps reach Workspace customers at scale without CASA (docs mention admin-trusted apps as a verification exemption but not the practical limits)."
+    ]
+  },
+  "meta": {
+    "generatedBy": "research-agent",
+    "generatedAt": "2026-10-23",
+    "version": 1
+  }
+}
