@@ -4,7 +4,8 @@
 
 A library of setup guides for 120+ OAuth providers, plus a live agent that investigates any app you name and writes a shareable guide while you watch.
 
-- Live: **https://oauth-pathfinder.vercel.app** (replace if you fork)
+- Live: **https://oauth-pathfinder-mu.vercel.app**
+- Source: **https://github.com/dhirajbit/oauth-pathfinder**
 - Built for the Composio APM (Integrations) take-home. Budget: ~7 hours.
 
 ## The problem, as I understand it
