@@ -68,7 +68,8 @@ export function GenerateClient({ app }: { app: string }) {
         clearInterval(timer);
       }
     })();
-    return () => { ctrl.abort(); clearInterval(timer); };
+    // Reset the guard on cleanup so StrictMode's second effect run (dev) restarts the stream.
+    return () => { started.current = false; ctrl.abort(); clearInterval(timer); };
   }, [app]);
 
   if (!app) {
@@ -85,7 +86,7 @@ export function GenerateClient({ app }: { app: string }) {
       <div>
         <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-6">
           <details className="rounded-lg border border-line bg-surface text-sm">
-            <summary className="cursor-pointer px-4 py-3 font-medium">Investigation log — {log.filter((l) => l.kind === "search").length} searches, {log.filter((l) => l.kind === "source").length} sources, {elapsed}s</summary>
+            <summary className="cursor-pointer px-4 py-3 font-medium">Investigation log — {log.filter((l) => l.kind === "search").length} searches, {log.filter((l) => l.kind === "open" || l.kind === "source").length} pages read, {elapsed}s</summary>
             <div className="px-4 pb-4"><Log log={log} /></div>
           </details>
         </div>

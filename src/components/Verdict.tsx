@@ -17,7 +17,7 @@ export function Verdict({ guide }: { guide: Guide }) {
   const waitDays = v.approvalWait.maxDays;
   const total = Math.max(handsOnDays + waitDays, 0.05);
   // Keep hands-on visible even when the wait dwarfs it.
-  const handsPct = Math.max((handsOnDays / total) * 100, 6);
+  const handsPct = waitDays > 0 ? Math.max((handsOnDays / total) * 100, 6) : 100;
   const waitPct = waitDays > 0 ? Math.max(100 - handsPct, 10) : 0;
 
   return (

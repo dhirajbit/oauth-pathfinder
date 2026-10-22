@@ -50,11 +50,67 @@ Output rules:
 Be specific. Numbers, URLs, scope strings. Short sentences.`;
 }
 
+type JsonNode = Record<string, unknown>;
+
+/** OpenAI strict mode needs every property required and no extras; optional fields become nullable. */
+function strictify(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(strictify);
+  if (node && typeof node === "object") {
+    const out: JsonNode = {};
+    for (const [k, v] of Object.entries(node as JsonNode)) out[k] = strictify(v);
+    const props = out.properties as Record<string, JsonNode> | undefined;
+    if (out.type === "object" && props) {
+      const required = new Set((out.required as string[] | undefined) ?? []);
+      for (const key of Object.keys(props)) {
+        if (!required.has(key)) {
+          const p = props[key];
+          if (typeof p.type === "string") p.type = [p.type, "null"];
+          else if (Array.isArray(p.type)) p.type = [...new Set([...(p.type as string[]), "null"])];
+          else props[key] = { anyOf: [p, { type: "null" }] };
+        }
+      }
+      out.required = Object.keys(props);
+      out.additionalProperties = false;
+    }
+    return out;
+  }
+  return node;
+}
+
 function jsonSchema() {
-  // Zod 4 ships a JSON Schema exporter; OpenAI accepts draft-2020-12 with strict:false.
-  const schema = z.toJSONSchema(GuideSchema, { target: "draft-2020-12" }) as Record<string, unknown>;
+  const schema = z.toJSONSchema(GuideSchema, { target: "draft-2020-12" }) as JsonNode;
   delete schema.$schema;
-  return schema;
+  return strictify(schema) as JsonNode;
+}
+
+/** Undo the nullable-for-optional trick and fill the fields models most often drop. */
+function normalize(raw: unknown): unknown {
+  const strip = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(strip);
+    if (v && typeof v === "object") {
+      const out: JsonNode = {};
+      for (const [k, val] of Object.entries(v as JsonNode)) if (val !== null) out[k] = strip(val);
+      return out;
+    }
+    return v;
+  };
+  const g = strip(raw) as JsonNode;
+  const composio = (g.composio ?? {}) as JsonNode;
+  const rawComposio = ((raw as JsonNode)?.composio ?? {}) as JsonNode;
+  if (!("managedAuthAvailable" in composio)) composio.managedAuthAvailable = rawComposio.managedAuthAvailable === null ? null : false;
+  g.composio = composio;
+  const scopes = (g.scopes ?? {}) as JsonNode;
+  scopes.examples = ((scopes.examples as JsonNode[] | undefined) ?? []).map((s) => ({ triggersReview: false, ...s }));
+  g.scopes = scopes;
+  g.prerequisites = ((g.prerequisites as JsonNode[] | undefined) ?? []).map((p) => ({ blocking: false, ...p }));
+  const approval = (g.approval ?? {}) as JsonNode;
+  for (const k of ["triggers", "reviewerAsksFor", "commonRejections"]) approval[k] ??= [];
+  g.approval = approval;
+  const evidence = (g.evidence ?? {}) as JsonNode;
+  for (const k of ["sources", "tested", "unverified"]) evidence[k] ??= [];
+  g.evidence = evidence;
+  g.meta ??= { generatedBy: "live-agent", generatedAt: new Date().toISOString(), version: 1 };
+  return g;
 }
 
 /** Try to pull a JSON object out of model text even if it added stray prose. */
@@ -83,7 +139,7 @@ export async function* investigate(appQuery: string, signal?: AbortSignal): Asyn
       tools: [{ type: "web_search" }],
       tool_choice: "auto",
       reasoning: { effort: "low" },
-      text: { format: { type: "json_schema", name: "oauth_setup_guide", schema: jsonSchema(), strict: false } },
+      text: { format: { type: "json_schema", name: "oauth_setup_guide", schema: jsonSchema(), strict: true } },
       stream: true,
       max_output_tokens: 12000,
     },
@@ -131,7 +187,7 @@ export async function* investigate(appQuery: string, signal?: AbortSignal): Asyn
   }
 
   yield { type: "status", text: "Validating against the guide schema…" };
-  let parsed = GuideSchema.safeParse(extractJson(text));
+  let parsed = GuideSchema.safeParse(normalize(extractJson(text)));
   if (!parsed.success) {
     // One repair pass: hand the validation errors back to the model without tools.
     yield { type: "status", text: "Schema mismatch — asking the model to repair its output" };
@@ -140,12 +196,12 @@ export async function* investigate(appQuery: string, signal?: AbortSignal): Asyn
         model: MODEL,
         instructions: "Fix the JSON so it validates against the schema. Return only the corrected JSON.",
         input: `Validation errors:\n${JSON.stringify(parsed.error.issues.slice(0, 20), null, 1)}\n\nJSON:\n${text}`,
-        text: { format: { type: "json_schema", name: "oauth_setup_guide", schema: jsonSchema(), strict: false } },
+        text: { format: { type: "json_schema", name: "oauth_setup_guide", schema: jsonSchema(), strict: true } },
         reasoning: { effort: "low" },
       },
       { signal }
     );
-    parsed = GuideSchema.safeParse(extractJson(repair.output_text));
+    parsed = GuideSchema.safeParse(normalize(extractJson(repair.output_text)));
     if (!parsed.success) {
       yield { type: "error", message: `Guide failed validation: ${parsed.error.issues[0]?.path.join(".")} ${parsed.error.issues[0]?.message}` };
       return;

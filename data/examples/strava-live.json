@@ -1,0 +1,361 @@
+{
+  "slug": "strava",
+  "name": "Strava",
+  "website": "https://developers.strava.com",
+  "category": "Fitness/Sports",
+  "summary": "Strava offers a public OAuth 2.0 API for third‑party apps. Registration is self‑serve in the Strava account’s API settings; default access is Single Player Mode (1 athlete), with an in‑dashboard upgrade to 10 athletes. Beyond 10 athletes you must submit the app for review. Access tokens are short‑lived (~6 hours) and refresh tokens rotate on each refresh. Default rate limits: overall 200/15min & 2,000/day, plus a separate non‑upload bucket 100/15min & 1,000/day. Redirect URIs must live under a single Authorization Callback Domain (localhost and 127.0.0.1 are whitelisted). A Strava subscription is required to create/upgrade an app to the Standard Tier. Webhooks are strongly encouraged and required for deauthorization compliance.",
+  "composio": {
+    "managedAuthAvailable": false,
+    "toolkitSlug": "",
+    "note": "Bring your own OAuth app; register the redirect URI https://backend.composio.dev/api/v3/toolkits/auth/callback"
+  },
+  "verdict": {
+    "difficulty": "moderate",
+    "difficultyReason": "Console is simple, but constraints exist: developer subscription requirement, strict athlete-cap gating with review, rotating refresh tokens, dual rate-limit buckets, and webhook expectations.",
+    "handsOnMinutes": {
+      "min": 25,
+      "max": 60
+    },
+    "approvalWait": {
+      "required": "conditional",
+      "minDays": 0,
+      "maxDays": 30,
+      "note": "No review needed for Single Player (1) or the in-dashboard upgrade to 10 athletes; review required to exceed 10 athletes or for higher limits. Community reports suggest ~7–10 business days but varies."
+    },
+    "timeToFirstToken": "~15–30 min for your own account; 7–10 business days (inferred) to pass review for >10 athletes."
+  },
+  "prerequisites": [
+    {
+      "text": "Active Strava account.",
+      "blocking": true,
+      "source": "https://developers.strava.com/docs/getting-started/"
+    },
+    {
+      "text": "Paid Strava subscription for the developer account (Standard Tier requirement).",
+      "blocking": true,
+      "source": "https://communityhub.strava.com/insider-journal-9/an-update-to-our-developer-program-13428"
+    },
+    {
+      "text": "Public website URL and an Authorization Callback Domain you control (localhost allowed for dev).",
+      "blocking": true,
+      "source": "https://developers.strava.com/docs/authentication/"
+    },
+    {
+      "text": "Published Privacy Policy and Data Deletion instructions that meet API Policy.",
+      "blocking": true,
+      "source": "https://www.strava.com/legal/api_policy"
+    },
+    {
+      "text": "App branding that follows Strava Brand Guidelines (\"Connect with Strava\" button, logos).",
+      "blocking": false,
+      "source": "https://developers.strava.com/guidelines"
+    }
+  ],
+  "steps": [
+    {
+      "id": "s1",
+      "title": "Create Strava account and ensure subscription",
+      "detail": "Sign up/sign in to Strava. Upgrade the developer account to a paid subscription to qualify for Standard Tier access.",
+      "who": "human",
+      "portalUrl": "https://www.strava.com/register",
+      "tips": [
+        "Use the same account that will own the API app."
+      ],
+      "source": "https://communityhub.strava.com/insider-journal-9/an-update-to-our-developer-program-13428"
+    },
+    {
+      "id": "s2",
+      "title": "Open API settings and create the app",
+      "detail": "Go to Settings → API and create a new application. Enter App Name, Category, Website, and Authorization Callback Domain.",
+      "who": "assisted",
+      "portalUrl": "https://www.strava.com/settings/api",
+      "tips": [
+        "For local dev use localhost or 127.0.0.1 as the Authorization Callback Domain.",
+        "Only domains under this value are accepted during OAuth."
+      ],
+      "source": "https://developers.strava.com/docs/getting-started/"
+    },
+    {
+      "id": "s3",
+      "title": "Record client credentials and initial tokens",
+      "detail": "Copy Client ID and Client Secret. Note the short‑lived access token and the refresh token shown; access tokens expire every ~6 hours and a new refresh token is issued at each refresh.",
+      "who": "agent",
+      "portalUrl": "https://www.strava.com/settings/api",
+      "tips": [
+        "Store secrets in your vault; never commit to source control."
+      ],
+      "source": "https://developers.strava.com/docs/authentication/"
+    },
+    {
+      "id": "s4",
+      "title": "Build the OAuth authorize URL",
+      "detail": "Construct GET https://www.strava.com/oauth/authorize with client_id, redirect_uri (under your callback domain), response_type=code, approval_prompt=auto|force, and scope as a comma or URL‑safe space‑delimited list.",
+      "who": "agent",
+      "tips": [
+        "Example: scope=activity:read,activity:write or scope=activity:read%20activity:write.",
+        "Always include a CSRF state."
+      ],
+      "source": "https://developers.strava.com/docs/authentication/"
+    },
+    {
+      "id": "s5",
+      "title": "Exchange code for tokens and implement refresh",
+      "detail": "POST https://www.strava.com/api/v3/oauth/token with grant_type=authorization_code to obtain access_token, refresh_token, expires_at/expires_in. Implement token refresh via POST .../oauth/token with grant_type=refresh_token. Persist the newest refresh token after each refresh.",
+      "who": "agent",
+      "tips": [
+        "Refresh when access token is expired or ≤3600s to expiry.",
+        "Rotate stored refresh token on every refresh."
+      ],
+      "source": "https://developers.strava.com/docs/authentication/"
+    },
+    {
+      "id": "s6",
+      "title": "Test calls and inspect rate-limit headers",
+      "detail": "Call a basic endpoint (e.g., GET /api/v3/athlete) with Authorization: Bearer. Observe X-RateLimit-* and X-ReadRateLimit-* headers. Respect both 15‑minute and daily limits.",
+      "who": "agent",
+      "portalUrl": "https://developers.strava.com/docs/reference/",
+      "tips": [
+        "Default overall: 200/15min & 2,000/day; non‑upload: 100/15min & 1,000/day."
+      ],
+      "source": "https://developers.strava.com/docs/rate-limits/"
+    },
+    {
+      "id": "s7",
+      "title": "Implement webhooks and deauth handling",
+      "detail": "Set up webhooks to reduce polling and detect deauthorization. Implement POST https://www.strava.com/oauth/revoke (preferred) or /oauth/deauthorize to revoke tokens when users disconnect.",
+      "who": "agent",
+      "portalUrl": "https://developers.strava.com/docs/webhooks/",
+      "tips": [
+        "Webhooks help stay under rate limits and are required to track deauthorization per policy."
+      ],
+      "source": "https://developers.strava.com/docs/getting-started/"
+    },
+    {
+      "id": "s8",
+      "title": "Comply with policy and branding",
+      "detail": "Review API Agreement and Brand Guidelines. Ensure your app’s UI shows the “Connect with Strava” button properly and your policy pages disclose data collection, consent withdrawal, and deletion mechanisms.",
+      "who": "agent",
+      "portalUrl": "https://www.strava.com/legal/api",
+      "tips": [
+        "Capture screenshots of all Strava data surfaces in your app for review."
+      ],
+      "source": "https://www.strava.com/legal/api_policy"
+    },
+    {
+      "id": "s9",
+      "title": "Upgrade to 10‑athlete access in dashboard",
+      "detail": "From API Settings Dashboard, upgrade your app’s access to enable up to 10 connected athletes and increased rate limits.",
+      "who": "human",
+      "portalUrl": "https://www.strava.com/settings/api",
+      "tips": [
+        "This upgrade is self‑serve; no form needed."
+      ],
+      "source": "https://developers.strava.com/docs/getting-started/"
+    },
+    {
+      "id": "s10",
+      "title": "Submit for review to exceed 10 athletes",
+      "detail": "Complete Strava’s Developer Program form with app details, links, and screenshots. Await review; respond to any follow‑ups.",
+      "who": "human",
+      "portalUrl": "https://share.hsforms.com/",
+      "tips": [
+        "Explain why each requested scope is necessary.",
+        "Demonstrate webhook use and data deletion flow."
+      ],
+      "source": "https://developers.strava.com/docs/rate-limits/"
+    }
+  ],
+  "scopes": {
+    "note": "Request only what you need. Users can uncheck scopes on consent; store granted scopes from the callback.",
+    "examples": [
+      {
+        "scope": "read",
+        "purpose": "Read public segments, routes, profile, posts, events, clubs, leaderboards.",
+        "triggersReview": false
+      },
+      {
+        "scope": "read_all",
+        "purpose": "Read private routes, private segments, private events.",
+        "triggersReview": true
+      },
+      {
+        "scope": "profile:read_all",
+        "purpose": "Read full profile even if set to Followers/Only You.",
+        "triggersReview": true
+      },
+      {
+        "scope": "profile:write",
+        "purpose": "Update weight and FTP; star/unstar segments.",
+        "triggersReview": true
+      },
+      {
+        "scope": "activity:read",
+        "purpose": "Read activities visible to Everyone/Followers (no privacy zones).",
+        "triggersReview": false
+      },
+      {
+        "scope": "activity:read_all",
+        "purpose": "Read all activities including Only You and privacy-zone data.",
+        "triggersReview": true
+      },
+      {
+        "scope": "activity:write",
+        "purpose": "Create uploads/manual activities; edit activities you can read.",
+        "triggersReview": true
+      }
+    ]
+  },
+  "approval": {
+    "required": "conditional",
+    "triggers": [
+      "Exceeding 10 connected athletes",
+      "Requesting sensitive scopes (read_all, profile:read_all, activity:read_all, activity:write)",
+      "Higher rate-limit adjustments",
+      "Apps with broad public distribution"
+    ],
+    "process": "Complete the Developer Program form with app description, scope justification, screenshots of data use and the Connect with Strava button. Ensure policies and branding compliance. Strava reviews and may request more info.",
+    "reviewTime": "Unspecified in docs; community reports ~7–10 business days.",
+    "reviewerAsksFor": [
+      "Screenshots of all Strava data surfaces and OAuth entry points",
+      "Privacy policy and data deletion instructions",
+      "Justification for requested scopes and rate-limit needs",
+      "Confirmation of webhook use for deauthorization and activity updates"
+    ],
+    "commonRejections": [
+      "Insufficient screenshots or unclear data use",
+      "Requesting overly broad scopes without justification",
+      "Apps replicating Strava core functionality or violating API Policy",
+      "Missing/insufficient privacy or data deletion disclosures"
+    ],
+    "source": "https://developers.strava.com/docs/rate-limits/"
+  },
+  "nuances": [
+    {
+      "title": "Access tokens expire after ~6 hours; refresh tokens rotate",
+      "detail": "Strava issues short‑lived access tokens (expires_in ~21600s). Each refresh returns a new refresh token and invalidates the old one. Always persist the newest refresh token.",
+      "source": "https://developers.strava.com/docs/authentication/"
+    },
+    {
+      "title": "Two rate‑limit buckets",
+      "detail": "Default overall: 200/15min & 2,000/day; separate non‑upload bucket: 100/15min & 1,000/day. Upload endpoints are excluded from the non‑upload bucket.",
+      "source": "https://developers.strava.com/docs/rate-limits/"
+    },
+    {
+      "title": "Athlete capacity gates",
+      "detail": "1 athlete by default (Single Player). Dashboard upgrade raises to 10; beyond 10 requires formal review. Capacity is visible in your API dashboard and enforced during OAuth.",
+      "source": "https://developers.strava.com/docs/getting-started/"
+    },
+    {
+      "title": "Redirect URI rules",
+      "detail": "redirect_uri must belong to the Authorization Callback Domain set in settings. localhost and 127.0.0.1 are whitelisted for development.",
+      "source": "https://developers.strava.com/docs/authentication/"
+    },
+    {
+      "title": "Scopes are comma or URL‑space delimited on request; returned scopes are space‑delimited in callback/token response",
+      "detail": "Build for both comma and %20 in requests; parse space‑delimited scopes on return.",
+      "source": "https://developers.strava.com/docs/authentication/"
+    },
+    {
+      "title": "Mobile OAuth endpoints differ",
+      "detail": "Mobile apps use https://www.strava.com/oauth/mobile/authorize; ensure iOS/Android handle app/web fallback. Google sign‑in does not work in mobile webviews.",
+      "source": "https://developers.strava.com/docs/authentication/"
+    },
+    {
+      "title": "Webhooks expected to avoid polling and for deauth compliance",
+      "detail": "Per docs and policy, implement webhooks to avoid rate‑limit waste and to detect deauthorization.",
+      "source": "https://developers.strava.com/docs/getting-started/"
+    }
+  ],
+  "blockers": [
+    {
+      "blocker": "Cannot connect more than 1 or 10 athletes before review.",
+      "workaround": "Use Single Player for initial build; upgrade in dashboard to 10; prepare review package early and submit once product is ready."
+    },
+    {
+      "blocker": "Invalid redirect_uri errors during OAuth.",
+      "workaround": "Ensure the redirect_uri host matches the Authorization Callback Domain exactly; use localhost/127.0.0.1 only for dev; avoid custom schemes unless following mobile guidelines."
+    },
+    {
+      "blocker": "Developer account lacks required Strava subscription (Standard Tier).",
+      "workaround": "Purchase/maintain a Strava subscription on the app owner account before creating/upgrading the app."
+    },
+    {
+      "blocker": "Hitting rate limits during backfill or polling.",
+      "workaround": "Throttle requests; implement webhooks; spread backfill over time; monitor X‑RateLimit and X‑ReadRateLimit headers."
+    },
+    {
+      "blocker": "Refresh tokens stop working unexpectedly.",
+      "workaround": "Always save and use the newest refresh token returned by the refresh call; older refresh tokens are invalidated immediately."
+    }
+  ],
+  "agentPlan": {
+    "agentDoes": [
+      "Draft app name/description, categories, and branding assets following Strava guidelines",
+      "Generate OAuth authorize URL and test the full code→token exchange with cURL",
+      "Implement token storage/rotation and backoff around X‑RateLimit headers",
+      "Set up webhook subscription code and deauthorization handling",
+      "Prepare review packet: scope justifications, screenshots, privacy/deletion policy text"
+    ],
+    "humanDoes": [
+      "Maintain Strava subscription on owner account",
+      "Create the app in Settings → API and copy secrets to the agent",
+      "Flip the dashboard upgrade to 10‑athlete access",
+      "Submit the Developer Program form and respond to reviewer emails"
+    ]
+  },
+  "evidence": {
+    "sources": [
+      {
+        "url": "https://developers.strava.com/docs/getting-started/",
+        "title": "Getting Started with the Strava API",
+        "confidence": "documented"
+      },
+      {
+        "url": "https://developers.strava.com/docs/authentication/",
+        "title": "Authentication | Strava Developers",
+        "confidence": "documented"
+      },
+      {
+        "url": "https://developers.strava.com/docs/rate-limits/",
+        "title": "Rate Limits | Strava Developers",
+        "confidence": "documented"
+      },
+      {
+        "url": "https://www.strava.com/legal/api_policy",
+        "title": "Strava API Policy",
+        "confidence": "documented"
+      },
+      {
+        "url": "https://www.strava.com/legal/api",
+        "title": "Strava API Agreement",
+        "confidence": "documented"
+      },
+      {
+        "url": "https://communityhub.strava.com/insider-journal-9/an-update-to-our-developer-program-13428",
+        "title": "An Update To Our Developer Program (subscription requirement)",
+        "confidence": "documented"
+      },
+      {
+        "url": "https://support.strava.com/en-us/articles/15401526-strava-api-and-mcp-faq",
+        "title": "Strava API and MCP FAQ",
+        "confidence": "documented"
+      }
+    ],
+    "tested": [
+      "Confirmed on Getting Started: default and upgraded athlete capacity (1 → 10), self‑serve upgrade, and token expiry note.",
+      "Confirmed on Authentication: scopes list; redirect_uri must be within Authorization Callback Domain; access tokens expire in six hours; refresh tokens rotate.",
+      "Confirmed on Rate Limits: overall 200/15min & 2,000/day; non‑upload 100/15min & 1,000/day; headers and reset cadence; review submission link for >10 athletes.",
+      "Confirmed on API Policy: disclosure, consent withdrawal, and deletion requirements; brand compliance expectations.",
+      "Confirmed subscription requirement from Strava community announcement/help: developer must have active subscription to access API as Standard Tier."
+    ],
+    "unverified": [
+      "App review turnaround typically 7–10 business days (inferred from community forum post; not in official docs).",
+      "Some community threads report multi‑week review delays; timelines vary by queue and scope (anecdotal)."
+    ]
+  },
+  "meta": {
+    "generatedBy": "live-agent",
+    "generatedAt": "2026-10-22T20:44:31.202Z",
+    "version": 1
+  }
+}
