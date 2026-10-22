@@ -67,7 +67,7 @@ export function Verdict({ guide }: { guide: Guide }) {
       <div className="mt-4 flex flex-wrap gap-2 text-xs">
         <Tag>
           {guide.composio.managedAuthAvailable === null
-            ? "Composio: no managed OAuth"
+            ? "No third-party OAuth registration for this provider"
             : guide.composio.managedAuthAvailable
               ? `Composio-managed OAuth available${guide.composio.toolkitSlug ? ` (${guide.composio.toolkitSlug})` : ""}`
               : "Composio: bring your own OAuth app"}

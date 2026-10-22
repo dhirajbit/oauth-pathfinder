@@ -45,7 +45,7 @@ Output rules:
 - scopes.examples: 4-8 REAL scope strings from the docs with triggersReview.
 - nuances: 4-8 gotchas. blockers: 3-6 with a workaround each. agentPlan: what an agent does end to end vs where the human takes over.
 - evidence.sources: every page you actually read (url, title, confidence = "documented" for official docs, "inferred" for third-party). evidence.tested: what you confirmed by reading the pages (phrase as "Confirmed on <page>: ..."). evidence.unverified: every number or claim you could not confirm. Be candid; an honest "unverified" is worth more than a confident guess.
-- composio.managedAuthAvailable: true if the app is in this list of toolkits with Composio-managed OAuth: ${COMPOSIO_MANAGED}. Set toolkitSlug to the slug in parentheses. If it is not in the list set false and note "Bring your own OAuth app; register the redirect URI https://backend.composio.dev/api/v3/toolkits/auth/callback". If the provider has no OAuth, set null.
+- composio.managedAuthAvailable: true if the app is in this list of toolkits with Composio-managed OAuth: ${COMPOSIO_MANAGED}. Set toolkitSlug to the slug in parentheses. If it is not in the list set false and note "Bring your own OAuth app; register the redirect URI https://backend.composio.dev/api/v3/toolkits/auth/callback". If the provider offers NO third-party OAuth client registration (API keys only, or OAuth only for approved partners), set managedAuthAvailable to null, leave toolkitSlug empty, and make the note say what the real auth path is (e.g. "No third-party OAuth; per-account API key") — do not mention a redirect URI in that case.
 - meta: generatedBy "live-agent", generatedAt "${today}", version 1.
 Be specific. Numbers, URLs, scope strings. Short sentences.`;
 }

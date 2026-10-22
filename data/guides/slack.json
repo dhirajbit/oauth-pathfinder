@@ -281,7 +281,10 @@
       "Opened every docs.slack.dev page listed above on 2026-10-23 and confirmed api.slack.com/authentication/oauth-v2, /reference/manifests, /distribution, /slack-marketplace/review-guide and /authentication/rotation all 302-redirect to docs.slack.dev.",
       "Confirmed the manifest reference marks only display_information.name as required and lists token_rotation_enabled, org_deploy_enabled and socket_mode_enabled under settings.",
       "Confirmed the Marketplace review guide currently states 10 active workspaces (a changelog entry mentioned a reduction to 5, but the live guideline page still says 10).",
-      "Confirmed docs.composio.dev/toolkits/managed-auth lists SLACK under Composio-managed OAuth available."
+      "Confirmed docs.composio.dev/toolkits/managed-auth lists SLACK under Composio-managed OAuth available.",
+      "Confirmed on docs.slack.dev/slack-marketplace/slack-marketplace-review-guide (spot-check 2026-10-23): 'the preliminary part of the review takes up to 10 business days', 'the functional review takes up to 10 weeks for new submissions and 6 weeks for published apps resubmitting changes', and 'Your app has been installed on 10 or more active workspaces' (active = used in the past 28 days). The review guide itself does not mention the 10 weekly-active-users figure; that comes from the guidelines page, which lists apps 'installed on less than 10 active workspaces and have less than 10 weekly active users' as unsuitable.",
+      "Confirmed on docs.slack.dev/authentication/using-token-rotation (spot-check 2026-10-23): 'With token rotation, it expires every 12 hours' / 'always expire in 43,200 seconds'; 'Refresh tokens are designed to be used once'; 'Token rotation may not be turned off once it's turned on'.",
+      "Confirmed on docs.slack.dev/changelog/2025/05/29/... and the app-manifests page (spot-check 2026-10-23): non-Marketplace commercial apps move from Tier 3 to Tier 1 ('1 request per minute'), 'limit' max/default reduced to 15, effective May 29, 2025 for new apps and new installs; 'Each app configuration token will expire 12 hours after it has been generated' and is refreshed via tooling.tokens.rotate."
     ],
     "unverified": [
       "Did not create a real Slack app or run the OAuth flow end to end in this session; step order follows the docs and the api.slack.com/apps UI labels may drift.",
@@ -293,6 +296,7 @@
   "meta": {
     "generatedBy": "research-agent",
     "generatedAt": "2026-10-23",
+    "reviewedBy": "spot-check 2026-10-23",
     "version": 1
   }
 }

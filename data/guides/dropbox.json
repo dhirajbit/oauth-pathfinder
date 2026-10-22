@@ -23,7 +23,7 @@
   },
   "prerequisites": [
     { "text": "A Dropbox account to own the app (a free Basic account works for user-scoped apps).", "blocking": true, "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide" },
-    { "text": "Decision on access type: App folder (sandboxed /Apps/<name> folder) or Full Dropbox. This cannot be changed after creation and team scopes need Full Dropbox.", "blocking": true, "source": "https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/How-to-change-application-access-type/td-p/152212" },
+    { "text": "Decision on access type: App folder (sandboxed /Apps/<name> folder) or Full Dropbox. This cannot be changed after creation and team scopes need Full Dropbox.", "blocking": true, "source": "https://community.dropbox.com/t5/Dropbox-API-Support-Feedback/How-to-change-application-access-type/td-p/152212" },
     { "text": "An app name that does not contain 'Dropbox', any Dropbox product name, 'DBX', 'DB', 'DfB', or start with 'drop'; it cannot be renamed after Production approval.", "blocking": true, "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/branding-guide" },
     { "text": "An HTTPS redirect URI (http is permitted only for localhost) registered exactly, including port and path.", "blocking": true, "source": "https://dropbox.tech/developers/oauth-code-flow-implementation-using-node-js-and-dropbox-javascript-sdk" },
     { "text": "An app-specific privacy policy and an app icon for the Production application.", "blocking": false, "source": "https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/developer-guide" },
@@ -170,7 +170,7 @@
     {
       "title": "Access type is permanent",
       "detail": "App folder vs Full Dropbox is chosen at creation and cannot be changed; Dropbox staff direct developers to create a new app. Existing tokens keep the old access level, so users must re-authorize against the new app key.",
-      "source": "https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/How-to-change-application-access-type/td-p/152212"
+      "source": "https://community.dropbox.com/t5/Dropbox-API-Support-Feedback/How-to-change-application-access-type/td-p/152212"
     },
     {
       "title": "Access tokens live about 4 hours; refresh tokens are the real credential",
@@ -259,7 +259,7 @@
       { "url": "https://www.dropbox.com/developers/reference/devguide", "title": "DBX Platform developer guide (legacy URL)", "confidence": "documented", "note": "Same content as the docs.dropboxapi.com guide; used for the 500-user and early-review quotes." },
       { "url": "https://www.dropbox.com/developers/business/docs", "title": "Dropbox Business API docs", "confidence": "documented", "note": "Fetch returned only navigation; team_data.member and admin-only authorization taken from search snippets of this page." },
       { "url": "https://dropbox.tech/developers/oauth-code-flow-implementation-using-node-js-and-dropbox-javascript-sdk", "title": "Dropbox tech blog: OAuth code flow with Node.js", "confidence": "inferred", "note": "States localhost is the only permitted http redirect URI." },
-      { "url": "https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/How-to-change-application-access-type/td-p/152212", "title": "Dropbox Community: How to change application access type", "confidence": "inferred", "note": "Staff confirm access type cannot be changed; create a new app." },
+      { "url": "https://community.dropbox.com/t5/Dropbox-API-Support-Feedback/How-to-change-application-access-type/td-p/152212", "title": "Dropbox Community: How to change application access type", "confidence": "inferred", "note": "Staff confirm access type cannot be changed; create a new app." },
       { "url": "https://community.dropbox.com/en/discussion/comment/598132", "title": "Dropbox Community: short-lived token lifetime", "confidence": "inferred", "note": "Short-lived tokens valid several hours; 14400s observed in SDK examples." },
       { "url": "https://django-storages.readthedocs.io/en/1.14.5/backends/dropbox.html", "title": "django-storages Dropbox backend", "confidence": "inferred", "note": "Shows a token response with expires_in 14400 and sl. prefix." },
       { "url": "https://community.dropbox.com/en/discussion/781526/team-info-read", "title": "Dropbox Community: team scopes hidden on App folder apps", "confidence": "inferred", "note": "Team scopes require Full Dropbox access type." },
@@ -269,7 +269,10 @@
     "tested": [
       "Opened the official OAuth guide, developer guide, branding guide and developer support FAQ (following 301 redirects from dropbox.com/developers/reference/* to docs.dropboxapi.com) and confirmed the quoted rules.",
       "Confirmed on docs.composio.dev/toolkits/managed-auth that DROPBOX appears under Composio-managed OAuth.",
-      "Confirmed the official OAuth guide does not state a numeric access-token lifetime; the 4-hour figure is from SDK examples and community posts."
+      "Confirmed the official OAuth guide does not state a numeric access-token lifetime; the 4-hour figure is from SDK examples and community posts.",
+      "Confirmed on docs.dropboxapi.com/.../developer-guide (spot-check 2026-10-23): 'once your app links 50 Dropbox users, you will have two weeks to apply for and receive production status approval' or 'your app's ability to link additional Dropbox users will be frozen'; a development app 'can only be linked with up to 500 total Dropbox users'; 'Enable additional users' and 'Request early review' are quoted verbatim. The guide says nothing about changing access type after creation.",
+      "Confirmed on dropbox.com/developers/support (spot-check 2026-10-23): 'We respond to nearly all production requests within a few business days'; 'it will not be reviewed until your app has linked with at least 50 Dropbox users'; 'Once apps are in production status, they cannot be renamed by you' (open an API support ticket).",
+      "Confirmed on community.dropbox.com thread 152212 (spot-check 2026-10-23; dropboxforum.com URL 301-redirects there): Dropbox staff (Greg-DB) wrote 'It's not currently possible to switch the permission on an existing app', delete-and-re-register in development mode, and for production apps 'register another API app for the other permission'. Re-confirmed the OAuth guide gives no expires_in number and no HTTPS/localhost redirect rule."
     ],
     "unverified": [
       "Exact access-token lifetime of 4 hours (14400s) is from third-party and community sources; official docs only say 'short-lived' and to rely on expires_in.",
@@ -283,6 +286,7 @@
   "meta": {
     "generatedBy": "research-agent",
     "generatedAt": "2026-10-23",
+    "reviewedBy": "spot-check 2026-10-23",
     "version": 1
   }
 }

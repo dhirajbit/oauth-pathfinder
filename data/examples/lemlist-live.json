@@ -1,0 +1,294 @@
+{
+  "slug": "lemlist",
+  "name": "lemlist",
+  "website": "https://developer.lemlist.com",
+  "category": "sales engagement",
+  "summary": "Lemlist’s public API authenticates with account-scoped API keys over HTTP Basic auth (no third‑party OAuth client registration). If you’re building an agent, plan to collect one API key per customer account, store it securely, and call REST endpoints directly. Lemlist hosts its own OAuth for its MCP (LLM connector) and CLI, but this does not require or allow developers to register client apps with Lemlist.",
+  "composio": {
+    "managedAuthAvailable": false,
+    "toolkitSlug": "",
+    "note": "Bring your own OAuth app; register the redirect URI https://backend.composio.dev/api/v3/toolkits/auth/callback. Note: Lemlist’s REST API uses API keys, not OAuth; for MCP connections Lemlist hosts its own OAuth and does not expose third‑party client registration."
+  },
+  "verdict": {
+    "difficulty": "easy",
+    "difficultyReason": "No OAuth app or consent screen to configure; you only generate an API key and call REST endpoints. Webhooks and rate limits are documented.",
+    "handsOnMinutes": {
+      "min": 10,
+      "max": 25
+    },
+    "approvalWait": {
+      "required": "none",
+      "minDays": 0,
+      "maxDays": 0,
+      "note": "none"
+    },
+    "timeToFirstToken": "~10 minutes with an API key; no OAuth client needed."
+  },
+  "prerequisites": [
+    {
+      "text": "A Lemlist account with access to Settings → Integrations → API & Webhooks.",
+      "blocking": true,
+      "source": "https://developer.lemlist.com/api-reference/getting-started/authentication"
+    },
+    {
+      "text": "Team role that can generate API keys (admin or a role with API access and Edit integrations).",
+      "blocking": true,
+      "source": "https://developer.lemlist.com/api-reference/endpoints/webhooks/delete-webhook"
+    },
+    {
+      "text": "Server or vault to store API keys (secret manager, KMS, or environment variables).",
+      "blocking": true,
+      "source": "https://help.lemlist.com/en/articles/4452694-find-and-use-the-lemlist-api"
+    }
+  ],
+  "steps": [
+    {
+      "id": "create-api-key",
+      "title": "Generate a Lemlist API key",
+      "detail": "Sign in to app.lemlist.com → click your avatar (bottom-left) → Settings → Integrations → API & Webhooks → Generate a new API key. Copy it once and store securely.",
+      "who": "human",
+      "portalUrl": "https://app.lemlist.com",
+      "tips": [
+        "The username is blank and the password is your API key in Basic auth.",
+        "Name keys by integration (e.g., “YourApp-Prod”)."
+      ],
+      "source": "https://developer.lemlist.com/api-reference/getting-started/authentication"
+    },
+    {
+      "id": "store-secret",
+      "title": "Store the key securely",
+      "detail": "Place the key in your secrets manager or encrypted environment variables. Rotate if exposed. Keep one key per customer account.",
+      "who": "agent",
+      "tips": [
+        "Treat like a password; never commit to git.",
+        "Document where each key is used."
+      ],
+      "source": "https://help.lemlist.com/en/articles/4452694-find-and-use-the-lemlist-api"
+    },
+    {
+      "id": "authenticate-calls",
+      "title": "Implement HTTP Basic authentication",
+      "detail": "Build the string \":API_KEY\" (note the leading colon), Base64‑encode it, and send Authorization: Basic <encoded>. Example curl: curl --location 'https://api.lemlist.com/api/{endpoint}' --header 'Authorization: Basic BASE64(:API_KEY)'.",
+      "who": "agent",
+      "tips": [
+        "Do not send Bearer tokens; Lemlist uses Basic auth.",
+        "Most HTTP clients can set --user \":API_KEY\" to build the header."
+      ],
+      "source": "https://developer.lemlist.com/api-reference/getting-started/authentication"
+    },
+    {
+      "id": "pick-endpoints",
+      "title": "Select and test endpoints you need",
+      "detail": "Start with read-only (e.g., GET /campaigns, GET /leads by email), then implement writes like POST /campaigns/{id}/leads. Verify 2xx/4xx handling and idempotency where relevant.",
+      "who": "agent",
+      "portalUrl": "https://developer.lemlist.com",
+      "tips": [
+        "Use the API reference examples to shape request bodies.",
+        "Capture error payloads for support and retries."
+      ],
+      "source": "https://developer.lemlist.com/api-reference/endpoints"
+    },
+    {
+      "id": "handle-rate-limits",
+      "title": "Build retry/backoff for rate limits",
+      "detail": "Respect 20 requests per 2 seconds per key. On 429, read Retry-After, X-RateLimit-Remaining, and X-RateLimit-Reset and back off accordingly.",
+      "who": "agent",
+      "source": "https://developer.lemlist.com/api-reference/getting-started/rate-limits"
+    },
+    {
+      "id": "set-webhooks",
+      "title": "Configure webhooks (optional)",
+      "detail": "Create webhooks for events you track (e.g., interested replies, campaign events). The API key’s user must have the Edit integrations permission, otherwise requests fail with 403.",
+      "who": "agent",
+      "portalUrl": "https://developer.lemlist.com/api-reference/endpoints/webhooks/add-webhook",
+      "tips": [
+        "Validate signatures if provided; log deliveries.",
+        "Use a unique webhook per environment."
+      ],
+      "source": "https://developer.lemlist.com/api-reference/endpoints/webhooks/delete-webhook"
+    },
+    {
+      "id": "multi-account",
+      "title": "Support multiple customer accounts",
+      "detail": "Each API key maps to one Lemlist account. Store one credential per account and switch keys to act on different customers.",
+      "who": "agent",
+      "tips": [
+        "No account parameter; the key selects the account.",
+        "Consider a per-tenant credential store."
+      ],
+      "source": "https://developer.lemlist.com/api-reference/getting-started/multiple-accounts"
+    },
+    {
+      "id": "security-hardening",
+      "title": "Limit blast radius and rotate keys",
+      "detail": "Issue distinct keys per environment and per integration, audit usage, and rotate on staff changes or suspected exposure.",
+      "who": "agent",
+      "source": "https://help.lemlist.com/en/articles/4452694-find-and-use-the-lemlist-api"
+    },
+    {
+      "id": "sandbox-check",
+      "title": "Verify plan/permissions for the features you call",
+      "detail": "If an endpoint returns 403, confirm the team role and plan allow the action (admin or custom role with API access). Adjust role permissions or contact Lemlist support if needed.",
+      "who": "human",
+      "source": "https://help.lemlist.com/en/articles/10366728-roles-and-permissions-in-enterprise-plan"
+    },
+    {
+      "id": "mcp-optional",
+      "title": "Optional: connect via Lemlist’s hosted MCP OAuth",
+      "detail": "If your agent platform supports MCP, point it to https://app.lemlist.com/mcp and complete user authorization. This flow is hosted by Lemlist; you do not register an OAuth client.",
+      "who": "assisted",
+      "portalUrl": "https://help.lemlist.com/en/articles/13728466-set-up-the-lemlist-mcp-server-in-your-llm-client-oauth-or-api-key",
+      "tips": [
+        "Prefer API keys for backend integrations you control.",
+        "Use OAuth in end-user LLM clients that manage tokens for you."
+      ],
+      "source": "https://help.lemlist.com/en/articles/13728466-set-up-the-lemlist-mcp-server-in-your-llm-client-oauth-or-api-key"
+    }
+  ],
+  "scopes": {
+    "note": "No third‑party OAuth scopes: Lemlist’s REST API uses API keys over HTTP Basic auth. Lemlist-hosted OAuth for MCP/CLI is first‑party and does not require developer app registration.",
+    "examples": []
+  },
+  "approval": {
+    "required": "none",
+    "triggers": [],
+    "process": "No app review or publishing process for REST API usage; you generate a key per account and can use it immediately.",
+    "reviewTime": "Not applicable",
+    "reviewerAsksFor": [],
+    "commonRejections": [],
+    "source": "https://developer.lemlist.com/api-reference/getting-started/authentication"
+  },
+  "nuances": [
+    {
+      "title": "HTTP Basic, not Bearer",
+      "detail": "All REST calls use Authorization: Basic with base64(\":API_KEY\"). Bearer tokens will fail.",
+      "source": "https://developer.lemlist.com/api-reference/getting-started/authentication"
+    },
+    {
+      "title": "Per‑account credentials",
+      "detail": "Each API key (or Lemlist‑hosted OAuth token) maps to a single Lemlist account. Switching accounts = switching keys.",
+      "source": "https://developer.lemlist.com/api-reference/getting-started/multiple-accounts"
+    },
+    {
+      "title": "Edit integrations permission for webhooks",
+      "detail": "Webhook writes fail with 403 unless the API key’s user has Edit integrations.",
+      "source": "https://developer.lemlist.com/api-reference/endpoints/webhooks/delete-webhook"
+    },
+    {
+      "title": "Rate limit is 20 requests / 2 seconds",
+      "detail": "Enforce client-side throttling and exponential backoff; read Retry-After and X-RateLimit-* headers.",
+      "source": "https://developer.lemlist.com/api-reference/getting-started/rate-limits"
+    },
+    {
+      "title": "Secrets visible once",
+      "detail": "You can only view an API key at creation—store it securely; otherwise, rotate and reissue.",
+      "source": "https://developer.lemlist.com/api-reference/getting-started/authentication"
+    },
+    {
+      "title": "No third‑party OAuth client registration",
+      "detail": "Lemlist does not expose a console to register external OAuth apps; use API keys or Lemlist’s hosted OAuth for MCP.",
+      "source": "https://help.lemlist.com/en/articles/13728466-set-up-the-lemlist-mcp-server-in-your-llm-client-oauth-or-api-key"
+    }
+  ],
+  "blockers": [
+    {
+      "blocker": "Need one key per customer account; cannot impersonate multiple accounts with one credential.",
+      "workaround": "Collect and store a separate API key per tenant; route requests by tenant key."
+    },
+    {
+      "blocker": "403 on webhook creation due to insufficient rights.",
+      "workaround": "Have an admin (or a role with Edit integrations) generate the key or grant the permission; retry."
+    },
+    {
+      "blocker": "Hitting global rate limits under batch imports/syncs.",
+      "workaround": "Queue and throttle to ≤20 req/2s per key; use backoff on 429 and parallelize across tenants with distinct keys."
+    },
+    {
+      "blocker": "Expecting OAuth scopes/refresh tokens for REST API.",
+      "workaround": "Use API keys for server-to-server; if you need user-consented flows inside LLM clients, use Lemlist’s hosted MCP OAuth instead."
+    }
+  ],
+  "agentPlan": {
+    "agentDoes": [
+      "Drafts integration plan and endpoint list from the API reference.",
+      "Implements Basic-auth headers and retries/backoff.",
+      "Generates webhook payload handlers and test calls.",
+      "Prepares per-tenant credential storage and rotation scripts.",
+      "Runs smoke tests against read and write endpoints."
+    ],
+    "humanDoes": [
+      "Log in and generate API keys for each Lemlist account.",
+      "Grant required team permissions (e.g., Edit integrations) where needed.",
+      "Approve optional MCP OAuth consent when connecting from an LLM client.",
+      "Decide on plan level or contact Lemlist support if an endpoint appears permission-gated."
+    ]
+  },
+  "evidence": {
+    "sources": [
+      {
+        "url": "https://developer.lemlist.com/api-reference/getting-started/authentication",
+        "title": "Authentication — Lemlist Developer Docs",
+        "confidence": "documented",
+        "note": "Explains API key over HTTP Basic with leading colon."
+      },
+      {
+        "url": "https://developer.lemlist.com/api-reference/getting-started/multiple-accounts",
+        "title": "Managing multiple accounts — Lemlist Developer Docs",
+        "confidence": "documented",
+        "note": "One key = one account; mentions OAuth token mapping for hosted MCP/CLI."
+      },
+      {
+        "url": "https://developer.lemlist.com/api-reference/getting-started/rate-limits",
+        "title": "Rate limits — Lemlist Developer Docs",
+        "confidence": "documented",
+        "note": "20 requests per 2 seconds; headers for limit status."
+      },
+      {
+        "url": "https://developer.lemlist.com/api-reference/endpoints/webhooks/delete-webhook",
+        "title": "Delete Webhook — Lemlist Developer Docs",
+        "confidence": "documented",
+        "note": "403 without Edit integrations; confirms permission requirement."
+      },
+      {
+        "url": "https://help.lemlist.com/en/articles/4452694-find-and-use-the-lemlist-api",
+        "title": "Find and use the lemlist API — Help Center",
+        "confidence": "documented",
+        "note": "How to generate/manage API keys; security handling."
+      },
+      {
+        "url": "https://help.lemlist.com/en/articles/13728466-set-up-the-lemlist-mcp-server-in-your-llm-client-oauth-or-api-key",
+        "title": "Set up the lemlist MCP server in your LLM client (OAuth or API key)",
+        "confidence": "documented",
+        "note": "Hosted MCP OAuth flow; no developer client registration step."
+      },
+      {
+        "url": "https://help.lemlist.com/en/collections/17109856-api-webhooks",
+        "title": "API & Webhooks — Help Center collection",
+        "confidence": "documented",
+        "note": "Index of API/webhook articles."
+      },
+      {
+        "url": "https://help.lemlist.com/en/articles/10366728-roles-and-permissions-in-enterprise-plan",
+        "title": "Roles and permissions in Enterprise plan",
+        "confidence": "documented",
+        "note": "Custom roles/permissions context for 403s."
+      }
+    ],
+    "tested": [
+      "Confirmed on Authentication page: Basic auth with empty username and API key as password.",
+      "Confirmed on Rate Limits page: 20 requests per 2 seconds; limit headers documented.",
+      "Confirmed on Webhooks page: 403 if API key user lacks Edit integrations permission.",
+      "Confirmed on Managing multiple accounts: each credential selects exactly one account; no account parameter."
+    ],
+    "unverified": [
+      "Public list of Lemlist OAuth scopes for third-party apps (not published in official docs).",
+      "Whether certain endpoints/features require Enterprise plan; pricing page mentions CRM integrations & API but does not enumerate per-endpoint gates."
+    ]
+  },
+  "meta": {
+    "generatedBy": "live-agent",
+    "generatedAt": "2026-10-22T20:24:33.364Z",
+    "reviewedBy": "",
+    "version": 1
+  }
+}

@@ -16,8 +16,8 @@
     "approvalWait": {
       "required": "conditional",
       "minDays": 0,
-      "maxDays": 60,
-      "note": "None while the app stays in Testing (max 100 test users, 7-day refresh tokens) or is Internal to one Workspace org. Sensitive scopes (Calendar, gmail.send): Google says 3-5 business days on the process page and 10 business days in the FAQ. Restricted scopes (Gmail read/modify): Google's FAQ says ~6 weeks, and the CASA assessment adds 2-3 weeks (tier 2) on top; community reports range 4-12 weeks end to end."
+      "maxDays": 63,
+      "note": "None while the app stays in Testing (max 100 test users, 7-day refresh tokens) or is Internal to one Workspace org. Sensitive scopes (Calendar, gmail.send): Google says 3-5 business days on the process page and 10 business days in the FAQ. Restricted scopes (Gmail read/modify): Google's FAQ says ~6 weeks, and the CASA assessment adds 2-3 weeks (tier 2) on top, i.e. up to ~9 weeks (63 days) from documented figures alone; tier-3 CASA (4-6 weeks) and community reports push this to 4-12 weeks end to end."
     },
     "timeToFirstToken": "~20 min for yourself and up to 100 test users (Testing mode, tokens die after 7 days); 1-2 weeks for public users with Calendar/sensitive scopes; 6-12 weeks for public users with Gmail restricted scopes (review + CASA)."
   },
@@ -302,7 +302,10 @@
       "Opened the web-server OAuth page and confirmed redirect URI rules (HTTPS except localhost, exact match, no wildcards/fragments/raw IPs).",
       "Opened the Security Assessment page and confirmed annual revalidation, AL1/AL2 assurance levels, and Letter of Validation terminology; opened the Google Health verification page and confirmed the $500-$4,500 fee range and 2-3 / 4-6 week tier durations.",
       "Opened the Demo Video, Minimum Scopes and Auto-Cancellations quick references and confirmed the listed rejection reasons, the 90-day timeout and the 24-hour resubmission cooldown.",
-      "Opened docs.composio.dev/toolkits/managed-auth and confirmed GMAIL and GOOGLECALENDAR appear under 'Composio-managed OAuth available'."
+      "Opened docs.composio.dev/toolkits/managed-auth and confirmed GMAIL and GOOGLECALENDAR appear under 'Composio-managed OAuth available'.",
+      "Confirmed on support.google.com/cloud/answer/15549945 (spot-check 2026-10-23): Testing is 'limited to up to 100 test users'; 'Authorizations by a test user will expire seven days from the time of consent' (name/email/profile-only apps exempt); unverified-app quota is '100 new users in total' and 'applies over the entire lifetime of the project, and it cannot be reset or changed'.",
+      "Confirmed on support.google.com/cloud/answer/13463817 and the sensitive-scope-verification page (spot-check 2026-10-23): FAQ table lists brand verification '2-3 Business days', sensitive '10 Business days', restricted '6 weeks' ('these estimates are not guaranteed'); the process page says 'typically takes 3-5 business days'.",
+      "Confirmed on developers.google.com/health/app-verification (spot-check 2026-10-23): CASA fees 'ranging from $500 to $4,500 USD, depending on your app's complexity'; 'can take 2-3 weeks for tier-2 applications and 4-6 weeks for tier-3 applications'; assessment is annual."
     ],
     "unverified": [
       "Per-scope sensitivity labels for Calendar scopes (calendar, calendar.events, calendar.readonly, calendar.freebusy) are only shown inside the Cloud Console UI; the public Calendar auth page does not print them. Treated as sensitive based on the console behaviour commonly reported, not from a page read here.",
@@ -316,6 +319,7 @@
   "meta": {
     "generatedBy": "research-agent",
     "generatedAt": "2026-10-23",
+    "reviewedBy": "spot-check 2026-10-23",
     "version": 1
   }
 }

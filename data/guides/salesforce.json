@@ -288,7 +288,7 @@
       { "url": "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_web_server_flow.htm&type=5", "title": "OAuth 2.0 Web Server Flow for Web App Integration (Salesforce Help)", "confidence": "documented", "note": "Authorize endpoint on My Domain, parameters, redirect_uri must match Callback URL, PKCE recommendation, scope subset rule." },
       { "url": "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_tokens_scopes.htm&type=5", "title": "OAuth Tokens and Scopes (Salesforce Help)", "confidence": "documented", "note": "Full scope table incl. api, web, full (no refresh token), refresh_token/offline_access synonymy, refresh token lifetime admin-configured." },
       { "url": "https://developer.salesforce.com/docs/platform/api-rest/guide/intro-rest-compatible-editions.html", "title": "Supported Editions and Required Permissions (REST API Developer Guide)", "confidence": "documented", "note": "API on by default in Enterprise/Performance/Unlimited/Developer; Professional add-on; API_DISABLED_FOR_ORG; API Enabled permission." },
-      { "url": "https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/security_review_how_it_works.htm", "title": "How the AppExchange Security Review Works (ISVforce Guide)", "confidence": "documented", "note": "Review required to distribute on AppExchange, five stages, readiness prerequisites, Code Analyzer / Checkmarx; timeline figures (1-2 weeks intake, 3-4 weeks testing, 2-3 weeks retest) seen via search snippet of this page." },
+      { "url": "https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/security_review_how_it_works.htm", "title": "How the AppExchange Security Review Works (ISVforce Guide)", "confidence": "documented", "note": "Review required to distribute on AppExchange, five stages, readiness prerequisites, Code Analyzer / Checkmarx; timeline table (1-2 weeks intake, 3-4 weeks first test, 2-3 weeks retest) and 'If you plan to distribute your solution for free, you don't pay the fee' read directly from the page on 2026-10-23 (developer.salesforce.com returns 403 to plain fetchers; a rendering fetcher was required)." },
       { "url": "https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/security_review_required_materials.htm", "title": "Required Materials for Security Review Submission (ISVforce Guide)", "confidence": "documented", "note": "Materials matrix by architecture: Dev Edition org, managed package, external credentials, Checkmarx, DAST, false positives, documentation; Managed-Released only." },
       { "url": "https://developer.salesforce.com/docs/platform/mobile-sdk/guide/connected-apps-howto.html", "title": "Create a Connected App (Mobile SDK Development Guide)", "confidence": "documented", "note": "Official 'wait a few minutes for the token to propagate' note; scope labels; callback URL rules for mobile." },
       { "url": "https://developer.salesforce.com/signup", "title": "Developer Edition signup", "confidence": "documented", "note": "Confirms free Developer Edition signup page exists; page does not list API limits." },
@@ -302,7 +302,10 @@
       "Read the listed developer.salesforce.com and help.salesforce.com pages on 2026-10-23 via a rendering fetcher (help.salesforce.com is JS-rendered and returns a 'CSS Error' shell to plain fetchers).",
       "Confirmed the Spring '26 connected-app restriction wording appears identically on four separate official pages.",
       "Opened docs.composio.dev/toolkits/managed-auth and confirmed SALESFORCE appears in the managed-OAuth list.",
-      "Did not create an org or an External Client App or run a token exchange during this research."
+      "Did not create an org or an External Client App or run a token exchange during this research.",
+      "Confirmed on security_review_how_it_works.htm (spot-check 2026-10-23): turnaround table reads 'Security Review Operations verifies ... 1-2 weeks', 'Product Security tests your solution for the first time 3-4 weeks', 'tests a resubmission ... 2-3 weeks', flagged as estimates; 'If you plan to distribute your solution for free, you don't pay the fee'. No fee amount is stated.",
+      "Confirmed on intro-oauth-and-connected-apps.html (spot-check 2026-10-23): 'Creating connected apps is restricted as of Spring '26. You can continue to use existing connected apps ... we recommend using external client apps instead. If you must continue creating connected apps, contact Salesforce Support.'",
+      "Confirmed on sfdx-dev-auth-eca.html and intro-rest-compatible-editions.html (spot-check 2026-10-23): callback URL example is http://localhost:1717/OauthRedirect; 'Setting a maximum of 90 days for the refresh token expiration is a security best practice'; viewing Consumer Key and Secret opens 'Verify Your Identity' and you 'Check your email for a verification code'; 'API access is enabled by default in Enterprise, Performance, Unlimited, and Developer Edition orgs. Professional Edition orgs can add API access as an add-on'; error is API_DISABLED_FOR_ORG."
     ],
     "unverified": [
       "The exact '2-10 minute' propagation window: Salesforce only says 'wait a few minutes'; the numeric range is from third-party guides.",
@@ -315,6 +318,7 @@
   "meta": {
     "generatedBy": "research-agent",
     "generatedAt": "2026-10-23",
+    "reviewedBy": "spot-check 2026-10-23",
     "version": 1
   }
 }
